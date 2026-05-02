@@ -7,10 +7,15 @@ if os.path.exists('procr'): shutil.rmtree('procr')
 !git clone https://github.com/Tamjid0/procr.git
 %cd /content/procr
 
-# Install MinerU 2.5 Pro and VLM Utils on top of Colab's default Torch
-print("📦 Installing MinerU & VLM Utils (using default Torch)...")
-# transformers==4.45.0 is required for the Qwen2-VL architecture
-!pip install magic-pdf==1.1.0 "mineru-vl-utils[transformers]==0.2.6" qwen-vl-utils==0.0.8 transformers==4.45.0 --quiet
+# Install MinerU 2.5 Pro and VLM Utils sequentially to avoid resolver conflicts
+print("📦 Step 1: Installing Magic-PDF...")
+!pip install magic-pdf==1.1.0 --quiet
+
+print("📦 Step 2: Installing MinerU VLM Utils...")
+!pip install "mineru-vl-utils[transformers]==0.2.6" qwen-vl-utils==0.0.8 --quiet
+
+print("📦 Step 3: Ensuring VLM-compatible Transformers...")
+!pip install "transformers>=4.45.0" --quiet
 
 print("📦 Step 2: Installing Server Stack...")
 !pip install pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
