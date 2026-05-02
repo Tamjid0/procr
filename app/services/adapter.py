@@ -54,6 +54,14 @@ class MinerUAdapter:
                     y1 = round(bbox[3] * page_height)
                 else:
                     x0, y0, x1, y1 = [round(v) for v in bbox]
+
+            # --- MATH TUNING ---
+            # If it's a math/equation block, shift it up slightly to fix the "downward" drift
+            is_math = any(m in etype.lower() for m in ["equation", "formula", "math"])
+            if is_math:
+                offset = int(page_height * 0.005) # 0.5% upward shift
+                y0 = max(0, y0 - offset)
+                y1 = max(0, y1 - offset)
             
             # Create a region block
             region = {
