@@ -41,7 +41,8 @@ class ModelManager:
             self._client = MinerUClient(
                 backend="transformers", 
                 model=model,
-                processor=processor
+                processor=processor,
+                image_analysis=True
             )
             
             self._is_ready = True

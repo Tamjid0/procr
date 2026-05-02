@@ -52,8 +52,7 @@ async def process_page(request: OCRRequest):
         
         # 2. VLM Inference
         client = model_manager.get_client()
-        # image_analysis=True triggers the layout + recognition flow
-        mineru_output = client.two_step_extract(image, image_analysis=True)
+        mineru_output = client.two_step_extract(image)
         inference_time = time.perf_counter()
         
         # 3. Adapt Output
