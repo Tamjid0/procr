@@ -15,8 +15,15 @@ logger = logging.getLogger("procr")
 
 app = FastAPI(title="Procr v2 - MinerU 2.5 Pro")
 
+from typing import Optional
+
 class OCRRequest(BaseModel):
-    image: str  # Base64 encoded image
+    document_id: str
+    page_index: int
+    image_data: str  # Base64 encoded image
+    image_width: int
+    image_height: int
+    processing_flags: Optional[dict] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -38,7 +45,7 @@ async def process_page(request: OCRRequest):
     
     try:
         # 1. Decode Image
-        img_data = base64.b64decode(request.image)
+        img_data = base64.b64decode(request.image_data)
         image = Image.open(io.BytesIO(img_data)).convert("RGB")
         page_width, page_height = image.size
         decode_time = time.perf_counter()
