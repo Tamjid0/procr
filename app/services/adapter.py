@@ -20,10 +20,20 @@ class MinerUAdapter:
         
         for idx, element in enumerate(mineru_output):
             # Element could be a dict or a ContentBlock object
-            etype = getattr(element, "type", None) or element.get("type", "text")
-            bbox = getattr(element, "bbox", None) or element.get("bbox", [0, 0, 0, 0])
-            content = getattr(element, "content", None) or element.get("content", "")
-            confidence = getattr(element, "confidence", 0.95) if hasattr(element, "confidence") else element.get("confidence", 0.95)
+            etype = getattr(element, "type", None) or (element.get("type", "text") if isinstance(element, dict) else "text")
+            bbox = getattr(element, "bbox", None) or (element.get("bbox", [0, 0, 0, 0]) if isinstance(element, dict) else [0, 0, 0, 0])
+            
+            # Robustly get content and confidence
+            if isinstance(element, dict):
+                content = element.get("content", "")
+                confidence = element.get("confidence", 0.95)
+            else:
+                content = getattr(element, "content", "")
+                confidence = getattr(element, "confidence", 0.95)
+            
+            # Ensure content is a string
+            if content is None: content = ""
+            content = str(content)
             
             # Smart Scaling Logic: Detect if VLM is using 0-1000 normalized coords (common for Qwen2-VL)
             # or raw pixels.
@@ -56,25 +66,26 @@ class MinerUAdapter:
             }
             
             # If the block has text, split by newline to create atomic lines for citations
-            lines = content.split('\n')
-            for l_idx, line_text in enumerate(lines):
-                if not line_text.strip():
-                    continue
+            if content.strip():
+                lines = content.split('\n')
+                for l_idx, line_text in enumerate(lines):
+                    if not line_text.strip():
+                        continue
+                        
+                    line_count = max(1, len(lines))
+                    line_h = (y1 - y0) / line_count
+                    line_y0 = round(y0 + (l_idx * line_h))
+                    line_y1 = round(line_y0 + line_h)
                     
-                line_count = max(1, len(lines))
-                line_h = (y1 - y0) / line_count
-                line_y0 = round(y0 + (l_idx * line_h))
-                line_y1 = round(line_y0 + line_h)
-                
-                region["extracted_lines"].append({
-                    "text": line_text.strip(),
-                    "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
-                    "confidence_score": float(confidence),
-                    "style": {
-                        "font_size": round(line_h * 0.8, 2),
-                        "is_bold": etype in ["header", "title"]
-                    }
-                })
+                    region["extracted_lines"].append({
+                        "text": line_text.strip(),
+                        "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
+                        "confidence_score": float(confidence),
+                        "style": {
+                            "font_size": round(line_h * 0.8, 2),
+                            "is_bold": etype in ["header", "title"]
+                        }
+                    })
                 
             extracted_regions.append(region)
             
