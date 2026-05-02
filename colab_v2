@@ -1,0 +1,62 @@
+# === CELL 1: SETUP (PROCR V2 - MINERU 2.5 PRO) ===
+import os, shutil
+%cd /content
+if os.path.exists('procr'): shutil.rmtree('procr')
+
+# Clone or create the directory (Since you are building this, we assume the files are already there or we create them)
+os.makedirs('procr/app/core', exist_ok=True)
+os.makedirs('procr/app/services', exist_ok=True)
+os.makedirs('procr/app/api', exist_ok=True)
+
+# Install pinned dependencies for MinerU 2.5 Pro
+print("📦 Installing MinerU 2.5 Pro Dependencies (This may take 3-5 minutes)...")
+!pip install magic-pdf[full]==1.1.0 mineru-vl-utils==0.2.6 pyngrok nest-asyncio fastapi uvicorn python-multipart torch==2.4.0 torchvision==0.19.0 transformers==4.45.0 qwen-vl-utils==0.0.8 --quiet
+
+print("✅ Setup Complete. Proceed to Cell 2.")
+
+
+# === CELL 2: LAUNCH PROCR SERVICE ===
+import time
+from pyngrok import ngrok
+import os
+
+# 1. Configuration
+NGROK_TOKEN = "3D7DPWdOrmeJCvePwE6AvZitDQL_Uhmv7TGyTQvrNBXm1hCm"
+PORT = 9002  # Using 9002 to avoid conflict with pyocr v1
+
+# 2. Cleanup
+print("1️⃣ Cleaning up old sessions...")
+!fuser -k {PORT}/tcp || true
+ngrok.set_auth_token(NGROK_TOKEN)
+try:
+    for t in ngrok.get_tunnels(): ngrok.disconnect(t.public_url)
+    !pkill ngrok || true
+except: pass
+
+# 3. Start Public Tunnel
+print("2️⃣ Connecting to Ngrok...")
+try:
+    public_url = ngrok.connect(PORT).public_url
+    print(f"✅ NGROK CONNECTED: {public_url}")
+except Exception as e:
+    print(f"❌ NGROK FAILED: {e}")
+    public_url = "FAILED"
+
+# 4. Start Server in Background
+if public_url != "FAILED":
+    print("3️⃣ Starting Procr Engine (MinerU 2.5 Pro) in Background...")
+    # Loading the 1.2B model will take ~1-2 minutes in the background
+    !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} > procr_server.log 2>&1 &
+
+    print("4️⃣ Waiting for VLM Eager Loading (~60-90 seconds)...")
+    time.sleep(60)
+
+    print("\n" + "="*50)
+    print("📜 LATEST PROCR LOGS:")
+    !tail -n 20 procr_server.log
+    print("="*50 + "\n")
+
+    print(f"🚀 PROCR PUBLIC URL: {public_url}")
+    print("👉 Use this for Phase 2 testing!")
+else:
+    print("🛑 Script stopped because Ngrok failed.")
