@@ -36,7 +36,12 @@ class ModelManager:
                 device_map="auto",
                 trust_remote_code=True
             )
-            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            processor = AutoProcessor.from_pretrained(
+                model_path, 
+                trust_remote_code=True,
+                min_pixels=256*28*28,
+                max_pixels=1280*28*28
+            )
 
             self._client = MinerUClient(
                 backend="transformers", 

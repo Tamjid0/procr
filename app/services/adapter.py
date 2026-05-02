@@ -56,12 +56,14 @@ class MinerUAdapter:
                     x0, y0, x1, y1 = [round(v) for v in bbox]
 
             # --- MATH TUNING ---
-            # If it's a math/equation block, shift it up slightly to fix the "downward" drift
+            # If it's a math/equation block, shift it up and tighten it
             is_math = any(m in etype.lower() for m in ["equation", "formula", "math"])
             if is_math:
-                offset = int(page_height * 0.005) # 0.5% upward shift
+                h_orig = y1 - y0
+                offset = int(page_height * 0.01) # 1% upward shift
                 y0 = max(0, y0 - offset)
-                y1 = max(0, y1 - offset)
+                # Tighten the box by 20% to center it better on the symbols
+                y1 = max(0, y1 - offset - int(h_orig * 0.2))
             
             # Create a region block
             region = {
