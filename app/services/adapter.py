@@ -25,20 +25,33 @@ class MinerUAdapter:
             content = getattr(element, "content", None) or element.get("content", "")
             confidence = getattr(element, "confidence", 0.95) if hasattr(element, "confidence") else element.get("confidence", 0.95)
             
-            # Normalize coordinates to 0-100 (pdfx standard)
-            x0, y0, x1, y1 = bbox
-            x = (x0 / page_width) * 100
-            y = (y0 / page_height) * 100
-            w = ((x1 - x0) / page_width) * 100
-            h = ((y1 - y0) / page_height) * 100
+            # Smart Scaling Logic: Detect if VLM is using 0-1000 normalized coords (common for Qwen2-VL)
+            # or raw pixels.
+            is_normalized = all(v <= 1000 for v in bbox) and any(v > 1 for v in bbox)
+            
+            if is_normalized:
+                # Scale 0-1000 -> Pixels
+                x0 = round((bbox[0] / 1000) * page_width)
+                y0 = round((bbox[1] / 1000) * page_height)
+                x1 = round((bbox[2] / 1000) * page_width)
+                y1 = round((bbox[3] / 1000) * page_height)
+            else:
+                # Keep as raw pixels (or scale if they were 0-1)
+                if all(v <= 1 for v in bbox):
+                    x0 = round(bbox[0] * page_width)
+                    y0 = round(bbox[1] * page_height)
+                    x1 = round(bbox[2] * page_width)
+                    y1 = round(bbox[3] * page_height)
+                else:
+                    x0, y0, x1, y1 = [round(v) for v in bbox]
             
             # Create a region block
             region = {
                 "region_id": f"reg-{idx}",
-                "region_index": idx,
-                "region_type": etype,
+                "region_index": int(idx),
+                "region_type": str(etype),
                 "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
-                "confidence_score": confidence,
+                "confidence_score": float(confidence),
                 "extracted_lines": []
             }
             
@@ -48,16 +61,15 @@ class MinerUAdapter:
                 if not line_text.strip():
                     continue
                     
-                # Approximate line height if multiple lines exist in one block
                 line_count = max(1, len(lines))
                 line_h = (y1 - y0) / line_count
-                line_y0 = y0 + (l_idx * line_h)
-                line_y1 = line_y0 + line_h
+                line_y0 = round(y0 + (l_idx * line_h))
+                line_y1 = round(line_y0 + line_h)
                 
                 region["extracted_lines"].append({
                     "text": line_text.strip(),
                     "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
-                    "confidence_score": confidence,
+                    "confidence_score": float(confidence),
                     "style": {
                         "font_size": round(line_h * 0.8, 2),
                         "is_bold": etype in ["header", "title"]
