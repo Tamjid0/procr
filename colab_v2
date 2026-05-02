@@ -8,11 +8,15 @@ if os.path.exists('procr'): shutil.rmtree('procr')
 %cd /content/procr
 
 # Install pinned dependencies for MinerU 2.5 Pro
+print("🧹 Cleaning up Colab conflicts...")
+!pip uninstall torchaudio -y --quiet
+
 print("📦 Step 1: Installing Torch Stack (CUDA 12.4 optimized)...")
 !pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124 --quiet
 
-print("📦 Step 2: Installing MinerU & VLM Utils...")
-!pip install magic-pdf[full]==1.1.0 mineru-vl-utils==0.2.6 qwen-vl-utils==0.0.8 --quiet
+print("📦 Step 2: Installing MinerU (Base) & VLM Utils...")
+# We use base 'magic-pdf' to avoid detectron2 conflicts; VLM does not need them.
+!pip install magic-pdf==1.1.0 mineru-vl-utils==0.2.6 qwen-vl-utils==0.0.8 --quiet
 
 print("📦 Step 3: Installing Server Stack...")
 !pip install pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet

@@ -14,7 +14,7 @@ accelerate==0.34.0
 qwen-vl-utils==0.0.8
 
 # MinerU / Magic-PDF
-magic-pdf[full]==1.1.0
+magic-pdf==1.1.0
 mineru-vl-utils==0.2.6
 
 # Utilities
