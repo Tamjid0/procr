@@ -59,6 +59,9 @@ async def process_page(request: OCRRequest):
         structured_data = MinerUAdapter.transform(mineru_output, page_width, page_height)
         mapping_time = time.perf_counter()
         
+        # 4. Consolidate Text
+        consolidated_text = "\n".join([getattr(r, "content", "") or r.get("content", "") for r in mineru_output])
+
         # Performance Logging
         total_time = mapping_time - start_time
         logger.info(
@@ -67,10 +70,15 @@ async def process_page(request: OCRRequest):
             f"Mapping {mapping_time - inference_time:.2f}s"
         )
         
+        # Final Flat Response (Surya v1 Contract)
         return {
-            "text": "\n".join([getattr(r, "content", "") or r.get("content", "") for r in mineru_output]),
-            "confidence": 0.95,
-            "structuralData": structured_data
+            "page_index": request.page_index,
+            "page_width": page_width,
+            "page_height": page_height,
+            "reading_order_hints": [r["region_index"] for r in structured_data["extracted_regions"]],
+            "extracted_regions": structured_data["extracted_regions"],
+            "text": consolidated_text,
+            "confidence": 0.95
         }
         
     except Exception as e:

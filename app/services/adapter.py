@@ -35,8 +35,10 @@ class MinerUAdapter:
             # Create a region block
             region = {
                 "region_id": f"reg-{idx}",
+                "region_index": idx,
                 "region_type": etype,
                 "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+                "confidence_score": confidence,
                 "extracted_lines": []
             }
             
@@ -55,7 +57,11 @@ class MinerUAdapter:
                 region["extracted_lines"].append({
                     "text": line_text.strip(),
                     "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
-                    "confidence_score": confidence
+                    "confidence_score": confidence,
+                    "style": {
+                        "font_size": round(line_h * 0.8, 2),
+                        "is_bold": etype in ["header", "title"]
+                    }
                 })
                 
             extracted_regions.append(region)
