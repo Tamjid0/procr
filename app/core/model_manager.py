@@ -1,6 +1,6 @@
 import torch
 import logging
-from mineru_vl_utils.client import MinerUClient
+from mineru_vl_utils import MinerUClient
 
 logger = logging.getLogger("procr")
 
