@@ -60,7 +60,12 @@ async def process_page(request: OCRRequest):
         mapping_time = time.perf_counter()
         
         # 4. Consolidate Text
-        consolidated_text = "\n".join([getattr(r, "content", "") or r.get("content", "") for r in mineru_output])
+        def get_content(r):
+            if isinstance(r, dict):
+                return str(r.get("content", "") or "")
+            return str(getattr(r, "content", "") or "")
+            
+        consolidated_text = "\n".join([get_content(r) for r in mineru_output if r is not None])
 
         # Performance Logging
         total_time = mapping_time - start_time
