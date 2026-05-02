@@ -31,6 +31,7 @@ class ModelManager:
             # Revert to stable internal loading but keep resolution capping hints
             # This avoids potential deadlocks when passing raw model objects to the client
             self._client = MinerUClient(
+                model_path=model_path,
                 backend="transformers", 
                 image_analysis=True
             )
