@@ -3,14 +3,19 @@ import os, shutil
 %cd /content
 if os.path.exists('procr'): shutil.rmtree('procr')
 
-# Clone or create the directory (Since you are building this, we assume the files are already there or we create them)
-os.makedirs('procr/app/core', exist_ok=True)
-os.makedirs('procr/app/services', exist_ok=True)
-os.makedirs('procr/app/api', exist_ok=True)
+# Clone the repository
+!git clone https://github.com/Tamjid0/procr.git
+%cd /content/procr
 
 # Install pinned dependencies for MinerU 2.5 Pro
-print("📦 Installing MinerU 2.5 Pro Dependencies (This may take 3-5 minutes)...")
-!pip install magic-pdf[full]==1.1.0 mineru-vl-utils==0.2.6 pyngrok nest-asyncio fastapi uvicorn python-multipart torch==2.4.0 torchvision==0.19.0 transformers==4.45.0 qwen-vl-utils==0.0.8 --quiet
+print("📦 Step 1: Installing Torch Stack (CUDA 12.4 optimized)...")
+!pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124 --quiet
+
+print("📦 Step 2: Installing MinerU & VLM Utils...")
+!pip install magic-pdf[full]==1.1.0 mineru-vl-utils==0.2.6 qwen-vl-utils==0.0.8 --quiet
+
+print("📦 Step 3: Installing Server Stack...")
+!pip install pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
 
 print("✅ Setup Complete. Proceed to Cell 2.")
 

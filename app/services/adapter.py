@@ -19,9 +19,11 @@ class MinerUAdapter:
         # Each block might contain text, tables, or formulas.
         
         for idx, element in enumerate(mineru_output):
-            etype = element.get("type", "text")
-            bbox = element.get("bbox", [0, 0, 0, 0])
-            content = element.get("content", "")
+            # Element could be a dict or a ContentBlock object
+            etype = getattr(element, "type", None) or element.get("type", "text")
+            bbox = getattr(element, "bbox", None) or element.get("bbox", [0, 0, 0, 0])
+            content = getattr(element, "content", None) or element.get("content", "")
+            confidence = getattr(element, "confidence", 0.95) if hasattr(element, "confidence") else element.get("confidence", 0.95)
             
             # Normalize coordinates to 0-100 (pdfx standard)
             x0, y0, x1, y1 = bbox
@@ -38,25 +40,22 @@ class MinerUAdapter:
                 "extracted_lines": []
             }
             
-            # Procr v2 Strategy: 
-            # If the block has text, we treat it as a 'line' for atomic citations.
-            # If MinerU provides 'spans' or 'lines' internally, we would iterate those.
-            # For now, we map the block content as a single line or split by newline.
-            
+            # If the block has text, split by newline to create atomic lines for citations
             lines = content.split('\n')
             for l_idx, line_text in enumerate(lines):
                 if not line_text.strip():
                     continue
                     
                 # Approximate line height if multiple lines exist in one block
-                line_h = (y1 - y0) / len(lines)
+                line_count = max(1, len(lines))
+                line_h = (y1 - y0) / line_count
                 line_y0 = y0 + (l_idx * line_h)
                 line_y1 = line_y0 + line_h
                 
                 region["extracted_lines"].append({
                     "text": line_text.strip(),
                     "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
-                    "confidence_score": element.get("confidence", 0.95)
+                    "confidence_score": confidence
                 })
                 
             extracted_regions.append(region)

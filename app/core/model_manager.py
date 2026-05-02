@@ -19,6 +19,8 @@ class ModelManager:
         if self._is_ready:
             return
 
+        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
         logger.info(f"🚀 Initializing Procr (MinerU 2.5 Pro)... Model: {model_path}")
         
@@ -26,11 +28,20 @@ class ModelManager:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Target Device: {device}")
 
-            # Using 'transformers' backend for stability in Colab environments
+            # Explicitly load model and processor for the transformers backend
+            # Using 'auto' for torch_dtype ensures BF16 on T4 GPUs
+            model = Qwen2VLForConditionalGeneration.from_pretrained(
+                model_path, 
+                torch_dtype="auto", 
+                device_map="auto",
+                trust_remote_code=True
+            )
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+
             self._client = MinerUClient(
                 backend="transformers", 
-                model_path=model_path,
-                device=device
+                model=model,
+                processor=processor
             )
             
             self._is_ready = True

@@ -62,7 +62,7 @@ async def process_page(request: OCRRequest):
         )
         
         return {
-            "text": "\n".join([r.get("content", "") for r in mineru_output]),
+            "text": "\n".join([getattr(r, "content", "") or r.get("content", "") for r in mineru_output]),
             "confidence": 0.95,
             "structuralData": structured_data
         }
