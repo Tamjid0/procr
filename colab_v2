@@ -28,6 +28,7 @@ snapshot_download(repo_id="opendatalab/MinerU2.5-Pro-2604-1.2B")
 print("✅ Setup Complete. Proceed to Cell 2.")
 
 
+
 # === CELL 2: LAUNCH PROCR SERVICE ===
 import time
 from pyngrok import ngrok
@@ -35,7 +36,7 @@ import os
 
 # 1. Configuration
 NGROK_TOKEN = "3D7DPWdOrmeJCvePwE6AvZitDQL_Uhmv7TGyTQvrNBXm1hCm"
-PORT = 9002  # Using 9002 to avoid conflict with pyocr v1
+PORT = 9001  # Using 9001 to avoid conflict with pyocr v1
 
 # 2. Cleanup
 print("1️⃣ Cleaning up old sessions...")
@@ -58,8 +59,8 @@ except Exception as e:
 # 4. Start Server in Background
 if public_url != "FAILED":
     print("3️⃣ Starting Procr Engine (MinerU 2.5 Pro) in Background...")
-    # Loading the 1.2B model will take ~1-2 minutes in the background
-    !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} > procr_server.log 2>&1 &
+    # Increased timeout for complex VLM inference
+    !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
 
     print("4️⃣ Waiting for VLM Eager Loading (~60-90 seconds)...")
     time.sleep(60)

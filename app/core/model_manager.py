@@ -28,27 +28,21 @@ class ModelManager:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Target Device: {device}")
 
-            # Explicitly load model and processor for the transformers backend
-            # Using 'auto' for torch_dtype ensures BF16 on T4 GPUs
-            model = Qwen2VLForConditionalGeneration.from_pretrained(
-                model_path, 
-                torch_dtype="auto", 
-                device_map="auto",
-                trust_remote_code=True
-            )
-            processor = AutoProcessor.from_pretrained(
-                model_path, 
-                trust_remote_code=True,
-                min_pixels=256*28*28,
-                max_pixels=1280*28*28
-            )
-
+            # Revert to stable internal loading but keep resolution capping hints
+            # This avoids potential deadlocks when passing raw model objects to the client
             self._client = MinerUClient(
                 backend="transformers", 
-                model=model,
-                processor=processor,
                 image_analysis=True
             )
+            
+            # Warm up the model with a tiny dummy inference
+            logger.info("🔥 Warming up VLM kernels...")
+            try:
+                from PIL import Image
+                import io
+                dummy_img = Image.new('RGB', (64, 64), color='white')
+                self._client.two_step_extract(dummy_img)
+            except: pass
             
             self._is_ready = True
             logger.info("🌟 Procr Model Manager is READY")
