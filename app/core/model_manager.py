@@ -35,7 +35,7 @@ class ModelManager:
                 model=model_path,
                 gpu_memory_utilization=0.95,
                 max_num_seqs=16,
-                enforce_eager=True,
+                enforce_eager=False,
                 trust_remote_code=True
             )
             
