@@ -43,7 +43,8 @@ class ModelManager:
             self._client = MinerUClient(
                 backend="vllm-engine",
                 vllm_llm=tuned_engine, 
-                image_analysis=True
+                image_analysis=True,
+                layout_image_size=(896, 896)
             )
             
             # Keep the warmup to avoid first-request timeout
