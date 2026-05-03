@@ -23,35 +23,18 @@ class ModelManager:
         import torch
 
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
-        logger.info(f"🚀 Initializing Stable Procr (16-bit)... Model: {model_path}")
+        logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
         
         try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Target Device: {device}")
-
-            # Stable 16-bit loading (Perfect for T4 16GB VRAM)
-            model = Qwen2VLForConditionalGeneration.from_pretrained(
-                model_path, 
-                dtype=torch.float16, # Fixed deprecated param
-                device_map={"": "cuda"},
-                trust_remote_code=True
-            )
-            processor = AutoProcessor.from_pretrained(
-                model_path, 
-                trust_remote_code=True,
-                min_pixels=128*28*28,
-                max_pixels=448*28*28 # 'Safe Zone' for T4 stability
-            )
-            
+            # Reverting to proven internal loading mechanism
             self._client = MinerUClient(
+                model_path=model_path,
                 backend="transformers", 
-                model=model,
-                processor=processor,
                 image_analysis=True
             )
             
-            # Warm up the model with a tiny dummy inference
-            logger.info("🔥 Warming up stable VLM kernels...")
+            # Keep the warmup to avoid first-request timeout
+            logger.info("🔥 Warming up VLM kernels...")
             try:
                 from PIL import Image
                 dummy_img = Image.new('RGB', (64, 64), color='white')
