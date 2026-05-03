@@ -30,14 +30,14 @@ class ModelManager:
             
             # 1. Manually initialize the vLLM engine with our high-performance settings
             # We use enforce_eager=True because CUDA Graphs are too slow to capture on T4.
-            # We set max_model_len=16384 to support ultra-dense pages with many regions.
+            # We set max_model_len=8192 to match the model's native position embedding limit.
             logger.info("🔥 Hyper-tuning vLLM engine for T4...")
             tuned_engine = vllm.LLM(
                 model=model_path,
                 gpu_memory_utilization=0.95,
                 max_num_seqs=16,
                 enforce_eager=True,
-                max_model_len=16384,
+                max_model_len=8192,
                 trust_remote_code=True
             )
             
