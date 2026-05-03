@@ -9,6 +9,7 @@ python-multipart==0.0.9
 # Inference & Vision (Using environment defaults where possible)
 transformers==4.45.0
 accelerate==0.34.0
+bitsandbytes==0.43.3
 qwen-vl-utils==0.0.8
 
 # MinerU / Magic-PDF

@@ -19,31 +19,54 @@ class ModelManager:
         if self._is_ready:
             return
 
-        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
+        import torch
 
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
-        logger.info(f"🚀 Initializing Procr (MinerU 2.5 Pro)... Model: {model_path}")
+        logger.info(f"🚀 Initializing Optimized Procr... Model: {model_path}")
         
         try:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Target Device: {device}")
 
-            # Revert to stable internal loading but keep resolution capping hints
-            # This avoids potential deadlocks when passing raw model objects to the client
+            # 4-bit Quantization Configuration for T4 Speedup
+            quant_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+
+            # Explicitly load model with optimizations
+            model = Qwen2VLForConditionalGeneration.from_pretrained(
+                model_path, 
+                quantization_config=quant_config,
+                attn_implementation="sdpa", # Torch native Flash-Attention path
+                device_map="auto",
+                trust_remote_code=True
+            )
+            processor = AutoProcessor.from_pretrained(
+                model_path, 
+                trust_remote_code=True,
+                min_pixels=256*28*28,
+                max_pixels=1024*28*28 # Slightly tighter for more speed
+            )
+            
             self._client = MinerUClient(
-                model_path=model_path,
                 backend="transformers", 
+                model=model,
+                processor=processor,
                 image_analysis=True
             )
             
             # Warm up the model with a tiny dummy inference
-            logger.info("🔥 Warming up VLM kernels...")
+            logger.info("🔥 Warming up optimized VLM kernels...")
             try:
                 from PIL import Image
-                import io
                 dummy_img = Image.new('RGB', (64, 64), color='white')
                 self._client.two_step_extract(dummy_img)
-            except: pass
+            except Exception as e:
+                logger.warning(f"Warmup skipped: {e}")
             
             self._is_ready = True
             logger.info("🌟 Procr Model Manager is READY")
