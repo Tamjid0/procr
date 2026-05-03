@@ -1,3 +1,7 @@
+import os
+# Force stable V0 engine to prevent T4 initialization crashes (V1 is unstable here)
+os.environ["VLLM_USE_V1"] = "0"
+
 import torch
 import logging
 from mineru_vl_utils import MinerUClient
