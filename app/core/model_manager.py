@@ -1,7 +1,3 @@
-import os
-# Force disable experimental V1 engine to prevent T4 initialization crashes
-os.environ["VLLM_USE_V1"] = "0"
-
 import torch
 import logging
 from mineru_vl_utils import MinerUClient
@@ -33,13 +29,14 @@ class ModelManager:
             import vllm
             
             # 1. Manually initialize the vLLM engine with our high-performance settings
-            # This bypasses MinerU's restrictive constructor and gives us full control.
+            # We use enforce_eager=True because CUDA Graphs are too slow to capture on T4.
             logger.info("🔥 Hyper-tuning vLLM engine for T4...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.90,
+                gpu_memory_utilization=0.95,
                 max_num_seqs=16,
-                enforce_eager=False,
+                enforce_eager=True,
+                max_model_len=4096,
                 trust_remote_code=True
             )
             
