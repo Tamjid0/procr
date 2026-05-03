@@ -33,15 +33,17 @@ class ModelManager:
             import vllm
             
             # 1. Manually initialize the vLLM engine with our high-performance settings
-            # We use enforce_eager=True because CUDA Graphs are too slow to capture on T4.
-            # We set max_model_len=8192 to match the model's native position embedding limit.
-            logger.info("🔥 Hyper-tuning vLLM engine for T4...")
+            # HYPER-TUNING FOR SUB-10S LATENCY (Speed Mode)
+            # We enable CUDA Graphs (enforce_eager=False) to eliminate Python overhead.
+            # NOTE: The first request after startup will have a ~45s 'warmup' penalty.
+            logger.info("🔥 Hyper-tuning vLLM engine for T4 (Speed Mode)...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.95,
+                gpu_memory_utilization=0.90, # Extra buffer for CUDA Graphs
                 max_num_seqs=16,
-                enforce_eager=True,
+                enforce_eager=False,
                 max_model_len=8192,
+                enable_chunked_prefill=False,
                 trust_remote_code=True
             )
             
