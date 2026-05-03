@@ -27,13 +27,17 @@ class ModelManager:
         
         try:
             import vllm
+            import os
+            
+            # Disable experimental V1 engine for better T4 stability
+            os.environ["VLLM_USE_V1"] = "0"
             
             # 1. Manually initialize the vLLM engine with our high-performance settings
             # This bypasses MinerU's restrictive constructor and gives us full control.
             logger.info("🔥 Hyper-tuning vLLM engine for T4...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.95,
+                gpu_memory_utilization=0.90,
                 max_num_seqs=16,
                 enforce_eager=False,
                 trust_remote_code=True
