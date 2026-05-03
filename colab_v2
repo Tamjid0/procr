@@ -62,8 +62,24 @@ if public_url != "FAILED":
     # Increased timeout for complex VLM inference
     !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
 
-    print("4️⃣ Waiting for VLM Eager Loading (~120 seconds)...")
-    time.sleep(120)
+    print("4️⃣ Waiting for VLM Eager Loading (Smart Polling)...")
+    start_time = time.time()
+    is_ready = False
+    while time.time() - start_time < 150: # Max timeout
+        if os.path.exists("procr_server.log"):
+            with open("procr_server.log", "r") as f:
+                content = f.read()
+                if "READY" in content:
+                    print(f"✅ Procr Engine is READY (in {int(time.time() - start_time)}s)!")
+                    is_ready = True
+                    break
+                if "Application startup failed" in content:
+                    print("❌ Server crashed during startup!")
+                    break
+        time.sleep(2)
+    
+    if not is_ready:
+        print("⚠️ Warning: Startup timed out or failed to find READY signal.")
 
     print("\n" + "="*50)
     print("📜 LATEST PROCR LOGS:")

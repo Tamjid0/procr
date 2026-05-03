@@ -40,7 +40,7 @@ class ModelManager:
                 model_path, 
                 trust_remote_code=True,
                 min_pixels=256*28*28,
-                max_pixels=1024*28*28
+                max_pixels=768*28*28 # Lowered for T4 stability during real requests
             )
             
             self._client = MinerUClient(

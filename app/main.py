@@ -45,17 +45,20 @@ async def process_page(request: OCRRequest):
     
     try:
         # 1. Decode Image
+        logger.info("📸 Decoding image...")
         img_data = base64.b64decode(request.image_data)
         image = Image.open(io.BytesIO(img_data)).convert("RGB")
         page_width, page_height = image.size
         decode_time = time.perf_counter()
         
         # 2. VLM Inference
+        logger.info("🧠 Running VLM Inference...")
         client = model_manager.get_client()
         mineru_output = client.two_step_extract(image)
         inference_time = time.perf_counter()
         
         # 3. Adapt Output
+        logger.info("🎯 Processing results...")
         structured_data = MinerUAdapter.transform(mineru_output, page_width, page_height)
         mapping_time = time.perf_counter()
         
