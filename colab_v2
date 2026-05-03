@@ -9,7 +9,7 @@ if os.path.exists('procr'): shutil.rmtree('procr')
 
 # Install MinerU 2.5 Pro and VLM Utils sequentially to avoid resolver conflicts
 print("📦 Step 1: Installing Magic-PDF...")
-!pip install magic-pdf==1.1.0 --quiet
+!pip install magic-pdf==1.1.0 "numpy<2.0.0" --quiet
 
 print("📦 Step 2: Installing MinerU VLM Utils (vLLM Backend)...")
 !pip install "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm>=0.6.0 --quiet

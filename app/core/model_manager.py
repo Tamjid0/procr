@@ -29,7 +29,7 @@ class ModelManager:
             # Switching to high-performance vLLM backend
             self._client = MinerUClient(
                 model_path=model_path,
-                backend="vllm", 
+                backend="vllm-engine", 
                 image_analysis=True
             )
             
