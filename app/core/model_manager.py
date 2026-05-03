@@ -26,14 +26,24 @@ class ModelManager:
         logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
         
         try:
-            # Hyper-tuned vLLM backend (direct kwargs for v0.2.6)
-            self._client = MinerUClient(
-                model_path=model_path,
-                backend="vllm-engine", 
-                image_analysis=True,
+            import vllm
+            
+            # 1. Manually initialize the vLLM engine with our high-performance settings
+            # This bypasses MinerU's restrictive constructor and gives us full control.
+            logger.info("🔥 Hyper-tuning vLLM engine for T4...")
+            tuned_engine = vllm.LLM(
+                model=model_path,
                 gpu_memory_utilization=0.95,
                 max_num_seqs=16,
-                enforce_eager=True
+                enforce_eager=True,
+                trust_remote_code=True
+            )
+            
+            # 2. Pass the pre-initialized engine to MinerU
+            self._client = MinerUClient(
+                backend="vllm-engine",
+                vllm_llm=tuned_engine, 
+                image_analysis=True
             )
             
             # Keep the warmup to avoid first-request timeout
