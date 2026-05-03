@@ -53,11 +53,11 @@ import os
 NGROK_TOKEN = "3D7DPWdOrmeJCvePwE6AvZitDQL_Uhmv7TGyTQvrNBXm1hCm"
 PORT = 9001  # Using 9001 to avoid conflict with pyocr v1
 
-# 2. Cleanup & Memory Reset
-print("1️⃣ Aggressively cleaning up old sessions & GPU memory...")
+# 2. Cleanup & Memory Reset (Targeted to avoid Kaggle kernel restart)
+print("1️⃣ Cleaning up old sessions...")
 !fuser -k {PORT}/tcp || true
-!fuser -k /dev/nvidia* || true
 !pkill -9 -f vllm || true
+!pkill -9 -f uvicorn || true
 !pkill -9 -f "python app/main.py" || true
 
 import torch, gc
