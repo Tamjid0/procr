@@ -17,16 +17,16 @@ else:
 
 # Install all packages first (ignore warnings here)
 print("📦 Step 1: Installing Magic-PDF...")
-!pip install magic-pdf==1.1.0 --quiet
+!pip install --default-timeout=1000 --retries 10 magic-pdf==1.1.0 --quiet
 
 print("📦 Step 2: Installing MinerU VLM & vLLM Backend...")
-!pip install "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm>=0.6.0 --quiet
+!pip install --default-timeout=1000 --retries 10 "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm>=0.6.0 --quiet
 
 print("📦 Step 3: Installing Transformers & Server Stack...")
-!pip install "transformers>=4.45.0" accelerate bitsandbytes scipy pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
+!pip install --default-timeout=1000 --retries 10 "transformers>=4.45.0" accelerate bitsandbytes scipy pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
 
 print("📦 Step 4: THE FINAL FIX - Forcing Numpy 1.x Compatibility...")
-!pip install "numpy<2.0.0" --force-reinstall --quiet
+!pip install --default-timeout=1000 --retries 10 "numpy<2.0.0" --force-reinstall --quiet
 
 import numpy
 print(f"✅ Final Environment Check -> Numpy Version: {numpy.__version__}")
@@ -35,7 +35,7 @@ if numpy.__version__.startswith("1"):
 else:
     print("⚠️ WARNING: Numpy is still on 2.x. This may cause crashes.")
 
-print("📦 Step 4: Pre-downloading Model Weights (1.2B Pro)...")
+print("📦 Step 5: Pre-downloading Model Weights (1.2B Pro)...")
 # Pre-downloading avoids the massive delay during the first request
 from huggingface_hub import snapshot_download
 snapshot_download(repo_id="opendatalab/MinerU2.5-Pro-2604-1.2B")
@@ -85,8 +85,8 @@ except Exception as e:
 # 4. Start Server in Background
 if public_url != "FAILED":
     print("3️⃣ Starting Procr Engine (MinerU 2.5 Pro) in Background...")
-    # Increased timeout for complex VLM inference
-    !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
+    # The FINAL fix for Ngrok stability and V0 engine speed
+    !nohup env PYTHONPATH=. VLLM_USE_V1=0 python -u -m uvicorn app.main:app --host 127.0.0.1 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
 
     print("4️⃣ Waiting for VLM Eager Loading (Smart Polling)...")
     start_time = time.time()
