@@ -1,8 +1,11 @@
+import os
+# Force stable V0 engine at the absolute entry point (V1 crashes on T4/Colab)
+os.environ["VLLM_USE_V1"] = "0"
+
 import base64
 import io
 import time
 import logging
-import os
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel

@@ -53,9 +53,20 @@ import os
 NGROK_TOKEN = "3D7DPWdOrmeJCvePwE6AvZitDQL_Uhmv7TGyTQvrNBXm1hCm"
 PORT = 9001  # Using 9001 to avoid conflict with pyocr v1
 
-# 2. Cleanup
-print("1️⃣ Cleaning up old sessions...")
+# 2. Cleanup & Memory Reset
+print("1️⃣ Aggressively cleaning up old sessions & GPU memory...")
 !fuser -k {PORT}/tcp || true
+!fuser -k /dev/nvidia* || true
+!pkill -9 -f vllm || true
+!pkill -9 -f "python app/main.py" || true
+
+import torch, gc
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    
+time.sleep(5) # Wait for hardware release
 ngrok.set_auth_token(NGROK_TOKEN)
 try:
     for t in ngrok.get_tunnels(): ngrok.disconnect(t.public_url)
