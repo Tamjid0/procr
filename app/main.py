@@ -80,8 +80,10 @@ async def process_page(request: OCRRequest):
             f"Mapping {mapping_time - inference_time:.2f}s"
         )
         
-        # Persistent stats logging for easy checking
-        with open("ocr_stats.log", "a") as f:
+        # Persistent stats logging (Absolute path for cross-environment visibility)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(project_root, "ocr_stats.log")
+        with open(log_path, "a") as f:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"[{timestamp}] Res: {page_width}x{page_height} | Total: {total_time:.2f}s | Inf: {inference_time - decode_time:.2f}s\n")
         
