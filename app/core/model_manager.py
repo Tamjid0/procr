@@ -19,30 +19,21 @@ class ModelManager:
         if self._is_ready:
             return
 
-        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
+        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
         import torch
 
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
-        logger.info(f"🚀 Initializing Optimized Procr... Model: {model_path}")
+        logger.info(f"🚀 Initializing Stable Procr (16-bit)... Model: {model_path}")
         
         try:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Target Device: {device}")
 
-            # 4-bit Quantization Configuration for T4 Speedup
-            quant_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16, # float16 is safer/native for T4
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
-            )
-
-            # Explicitly load model with optimizations
+            # Stable 16-bit loading (Perfect for T4 16GB VRAM)
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_path, 
-                quantization_config=quant_config,
-                # attn_implementation="sdpa", # Disabled temporarily for stability
-                device_map={"": "cuda"}, # Explicitly map to GPU 0
+                torch_dtype=torch.float16,
+                device_map={"": "cuda"},
                 trust_remote_code=True
             )
             processor = AutoProcessor.from_pretrained(
@@ -59,14 +50,14 @@ class ModelManager:
                 image_analysis=True
             )
             
-            # Temporarily disabled warmup to check startup stability
-            # logger.info("🔥 Warming up optimized VLM kernels...")
-            # try:
-            #     from PIL import Image
-            #     dummy_img = Image.new('RGB', (64, 64), color='white')
-            #     self._client.two_step_extract(dummy_img)
-            # except Exception as e:
-            #     logger.warning(f"Warmup skipped: {e}")
+            # Warm up the model with a tiny dummy inference
+            logger.info("🔥 Warming up stable VLM kernels...")
+            try:
+                from PIL import Image
+                dummy_img = Image.new('RGB', (64, 64), color='white')
+                self._client.two_step_extract(dummy_img)
+            except Exception as e:
+                logger.warning(f"Warmup skipped: {e}")
             
             self._is_ready = True
             logger.info("🌟 Procr Model Manager is READY")
