@@ -41,15 +41,15 @@ class ModelManager:
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_path, 
                 quantization_config=quant_config,
-                attn_implementation="sdpa", # Torch native Flash-Attention path
-                device_map="auto",
+                # attn_implementation="sdpa", # Disabled temporarily for stability
+                device_map={"": "cuda"}, # Explicitly map to GPU 0
                 trust_remote_code=True
             )
             processor = AutoProcessor.from_pretrained(
                 model_path, 
                 trust_remote_code=True,
                 min_pixels=256*28*28,
-                max_pixels=1024*28*28 # Slightly tighter for more speed
+                max_pixels=1024*28*28
             )
             
             self._client = MinerUClient(
@@ -59,14 +59,14 @@ class ModelManager:
                 image_analysis=True
             )
             
-            # Warm up the model with a tiny dummy inference
-            logger.info("🔥 Warming up optimized VLM kernels...")
-            try:
-                from PIL import Image
-                dummy_img = Image.new('RGB', (64, 64), color='white')
-                self._client.two_step_extract(dummy_img)
-            except Exception as e:
-                logger.warning(f"Warmup skipped: {e}")
+            # Temporarily disabled warmup to check startup stability
+            # logger.info("🔥 Warming up optimized VLM kernels...")
+            # try:
+            #     from PIL import Image
+            #     dummy_img = Image.new('RGB', (64, 64), color='white')
+            #     self._client.two_step_extract(dummy_img)
+            # except Exception as e:
+            #     logger.warning(f"Warmup skipped: {e}")
             
             self._is_ready = True
             logger.info("🌟 Procr Model Manager is READY")
