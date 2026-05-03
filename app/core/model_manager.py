@@ -1,3 +1,7 @@
+import os
+# Force disable experimental V1 engine to prevent T4 initialization crashes
+os.environ["VLLM_USE_V1"] = "0"
+
 import torch
 import logging
 from mineru_vl_utils import MinerUClient
@@ -27,10 +31,6 @@ class ModelManager:
         
         try:
             import vllm
-            import os
-            
-            # Disable experimental V1 engine for better T4 stability
-            os.environ["VLLM_USE_V1"] = "0"
             
             # 1. Manually initialize the vLLM engine with our high-performance settings
             # This bypasses MinerU's restrictive constructor and gives us full control.
