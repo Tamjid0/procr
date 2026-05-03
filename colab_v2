@@ -3,8 +3,16 @@ import os, shutil
 %cd /content
 if os.path.exists('procr'): shutil.rmtree('procr')
 
-# Clone the repository
-!git clone https://github.com/Tamjid0/procr.git
+# Step 0: Clone/Update Repo (Branch: opt)
+import os
+if not os.path.exists("procr"):
+    !git clone -b opt https://github.com/tamjidh/procr.git
+else:
+    %cd procr
+    !git checkout opt
+    !git pull origin opt
+    %cd ..
+
 %cd /content/procr
 
 # Install MinerU 2.5 Pro and VLM Utils sequentially to avoid resolver conflicts

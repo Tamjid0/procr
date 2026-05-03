@@ -26,11 +26,16 @@ class ModelManager:
         logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
         
         try:
-            # Switching to high-performance vLLM backend
+            # Hyper-tuned vLLM backend for T4 performance
             self._client = MinerUClient(
                 model_path=model_path,
                 backend="vllm-engine", 
-                image_analysis=True
+                image_analysis=True,
+                backend_kwargs={
+                    "gpu_memory_utilization": 0.95,
+                    "max_num_seqs": 16,
+                    "enforce_eager": True
+                }
             )
             
             # Keep the warmup to avoid first-request timeout
