@@ -2,6 +2,8 @@ import base64
 import io
 import time
 import logging
+import os
+from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from PIL import Image
@@ -77,6 +79,11 @@ async def process_page(request: OCRRequest):
             f"Inference {inference_time - decode_time:.2f}s | "
             f"Mapping {mapping_time - inference_time:.2f}s"
         )
+        
+        # Persistent stats logging for easy checking
+        with open("ocr_stats.log", "a") as f:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{timestamp}] Res: {page_width}x{page_height} | Total: {total_time:.2f}s | Inf: {inference_time - decode_time:.2f}s\n")
         
         # Final Flat Response (Surya v1 Contract)
         return {

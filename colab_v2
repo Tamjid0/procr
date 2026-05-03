@@ -6,7 +6,7 @@ if os.path.exists('procr'): shutil.rmtree('procr')
 # Step 0: Clone/Update Repo (Branch: opt)
 import os
 if not os.path.exists("procr"):
-    !git clone -b opt https://github.com/tamjidh/procr.git
+    !git clone -b opt https://github.com/Tamjid0/procr.git
 else:
     %cd procr
     !git checkout opt
@@ -16,7 +16,7 @@ else:
 %cd /content/procr
 
 # Install MinerU 2.5 Pro and VLM Utils sequentially to avoid resolver conflicts
-print("📦 Step 1: Installing Magic-PDF...")
+print("📦 Step 1: Installing Core PDF Stack & Solving Numpy Conflict...")
 !pip install magic-pdf==1.1.0 "numpy<2.0.0" --quiet
 
 print("📦 Step 2: Installing MinerU VLM Utils (vLLM Backend)...")
@@ -25,7 +25,7 @@ print("📦 Step 2: Installing MinerU VLM Utils (vLLM Backend)...")
 print("📦 Step 3: Ensuring VLM-compatible Transformers & Accelerators...")
 !pip install "transformers>=4.45.0" accelerate bitsandbytes scipy --quiet
 
-print("📦 Step 2: Installing Server Stack...")
+print("📦 Step 4: Installing Server Stack...")
 !pip install pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
 
 print("📦 Step 4: Pre-downloading Model Weights (1.2B Pro)...")
