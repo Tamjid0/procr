@@ -104,4 +104,6 @@ async def process_page(request: OCRRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    # Use the PORT environment variable if set, otherwise default to 9001
+    port = int(os.environ.get("PORT", 9001))
+    uvicorn.run(app, host="0.0.0.0", port=port)
