@@ -42,13 +42,13 @@ async def diagnostic():
 @app.post("/api/v1/ocr/process-page")
 async def process_page(request: OCRRequest):
     start_time = time.perf_counter()
-    
     try:
         # 1. Decode Image
         logger.info("📸 Decoding image...")
         img_data = base64.b64decode(request.image_data)
         image = Image.open(io.BytesIO(img_data)).convert("RGB")
         page_width, page_height = image.size
+        logger.info(f"📄 Image Decoded: {page_width}x{page_height}")
         decode_time = time.perf_counter()
         
         # 2. VLM Inference

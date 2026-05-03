@@ -32,15 +32,15 @@ class ModelManager:
             # Stable 16-bit loading (Perfect for T4 16GB VRAM)
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_path, 
-                torch_dtype=torch.float16,
+                dtype=torch.float16, # Fixed deprecated param
                 device_map={"": "cuda"},
                 trust_remote_code=True
             )
             processor = AutoProcessor.from_pretrained(
                 model_path, 
                 trust_remote_code=True,
-                min_pixels=256*28*28,
-                max_pixels=768*28*28 # Lowered for T4 stability during real requests
+                min_pixels=128*28*28,
+                max_pixels=448*28*28 # 'Safe Zone' for T4 stability
             )
             
             self._client = MinerUClient(
