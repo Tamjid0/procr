@@ -26,10 +26,10 @@ class ModelManager:
         logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
         
         try:
-            # Reverting to proven internal loading mechanism
+            # Switching to high-performance vLLM backend
             self._client = MinerUClient(
                 model_path=model_path,
-                backend="transformers", 
+                backend="vllm", 
                 image_analysis=True
             )
             
