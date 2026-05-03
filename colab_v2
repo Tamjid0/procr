@@ -14,8 +14,8 @@ print("📦 Step 1: Installing Magic-PDF...")
 print("📦 Step 2: Installing MinerU VLM Utils...")
 !pip install "mineru-vl-utils[transformers]==0.2.6" qwen-vl-utils==0.0.8 --quiet
 
-print("📦 Step 3: Ensuring VLM-compatible Transformers...")
-!pip install "transformers>=4.45.0" --quiet
+print("📦 Step 3: Ensuring VLM-compatible Transformers & Accelerators...")
+!pip install "transformers>=4.45.0" accelerate bitsandbytes scipy --quiet
 
 print("📦 Step 2: Installing Server Stack...")
 !pip install pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
