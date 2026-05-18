@@ -1,3 +1,7 @@
+import os
+# Force stable V0 engine to prevent T4 initialization crashes (V1 is unstable here)
+os.environ["VLLM_USE_V1"] = "0"
+
 import torch
 import logging
 from mineru_vl_utils import MinerUClient
@@ -26,10 +30,27 @@ class ModelManager:
         logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
         
         try:
-            # Switching to high-performance vLLM backend
+            import vllm
+            
+            # 1. Manually initialize the vLLM engine with our high-performance settings
+            # HYPER-TUNING FOR SUB-10S LATENCY (Speed Mode)
+            # We enable CUDA Graphs (enforce_eager=False) to eliminate Python overhead.
+            # NOTE: The first request after startup will have a ~45s 'warmup' penalty.
+            logger.info("🔥 Hyper-tuning vLLM engine for T4 (Speed Mode)...")
+            tuned_engine = vllm.LLM(
+                model=model_path,
+                gpu_memory_utilization=0.90, # Extra buffer for CUDA Graphs
+                max_num_seqs=16,
+                enforce_eager=False,
+                max_model_len=8192,
+                enable_chunked_prefill=False,
+                trust_remote_code=True
+            )
+            
+            # 2. Pass the pre-initialized engine to MinerU
             self._client = MinerUClient(
-                model_path=model_path,
-                backend="vllm-engine", 
+                backend="vllm-engine",
+                vllm_llm=tuned_engine, 
                 image_analysis=True
             )
             
