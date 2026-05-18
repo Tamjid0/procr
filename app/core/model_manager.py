@@ -39,10 +39,10 @@ class ModelManager:
             logger.info("🔥 Hyper-tuning vLLM engine for T4 (Speed Mode)...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.90, # Extra buffer for CUDA Graphs
-                max_num_seqs=16,
-                enforce_eager=False,
-                max_model_len=8192,
+                gpu_memory_utilization=0.50, # Reduced from 0.90 to allow sharing GPU memory with Surya OCR
+                max_num_seqs=8,
+                enforce_eager=True,           # Disabled CUDA Graphs to drastically reduce startup VRAM overhead
+                max_model_len=4096,          # Reduced from 8192 to save massive KV cache memory
                 enable_chunked_prefill=False,
                 trust_remote_code=True
             )
