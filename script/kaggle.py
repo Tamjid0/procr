@@ -1,0 +1,149 @@
+# === CELL 1: SETUP (PROCR V2 - MINERU 2.5 PRO) ===
+import os, shutil
+%cd /content
+if os.path.exists('procr'): shutil.rmtree('procr')
+
+# Step 0: Clone/Update Repo (Branch: opt)
+import os
+if not os.path.exists("procr"):
+    !git clone -b opt https://github.com/Tamjid0/procr.git
+else:
+    %cd procr
+    !git checkout opt
+    !git pull origin opt
+    %cd ..
+
+%cd /content/procr
+
+# Install all packages first (ignore warnings here)
+print("📦 Step 1: Installing Magic-PDF...")
+!pip install --default-timeout=1000 --retries 10 magic-pdf==1.1.0 --quiet
+
+print("📦 Step 2: Installing MinerU VLM & vLLM Backend...")
+!pip install --default-timeout=1000 --retries 10 "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm>=0.6.0 --quiet
+
+print("📦 Step 3: Installing Transformers & Server Stack...")
+!pip install --default-timeout=1000 --retries 10 "transformers>=4.45.0" accelerate bitsandbytes scipy pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
+
+print("📦 Step 4: THE FINAL FIX - Forcing Numpy 1.x Compatibility...")
+!pip install --default-timeout=1000 --retries 10 "numpy<2.0.0" --force-reinstall --quiet
+
+import numpy
+print(f"✅ Final Environment Check -> Numpy Version: {numpy.__version__}")
+if numpy.__version__.startswith("1"):
+    print("🚀 SUCCESS: Environment is stable. Proceed to Cell 2.")
+else:
+    print("⚠️ WARNING: Numpy is still on 2.x. This may cause crashes.")
+
+print("📦 Step 5: Pre-downloading Model Weights (1.2B Pro)...")
+# Pre-downloading avoids the massive delay during the first request
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id="opendatalab/MinerU2.5-Pro-2604-1.2B")
+
+print("✅ Setup Complete. Proceed to Cell 2.")
+
+
+
+
+
+
+
+# === CELL 2: LAUNCH PROCR SERVICE ===
+import time
+from pyngrok import ngrok
+import os
+
+# 1. Configuration
+NGROK_TOKEN = "3DFRfOfHvai4O3lZZcAw1QaGRq5_7QVkSuon8wT2SE8Hq8VKf"
+PORT = 9001
+
+# 2. Cleanup & Memory Reset (Targeted to avoid Kaggle kernel restart)
+print("1️⃣ Cleaning up old sessions...")
+!fuser -k {PORT}/tcp || true
+!pkill -9 -f vllm || true
+!pkill -9 -f uvicorn || true
+!pkill -9 -f "python app/main.py" || true
+
+import torch, gc
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    
+time.sleep(5) # Wait for hardware release
+ngrok.set_auth_token(NGROK_TOKEN)
+try:
+    for t in ngrok.get_tunnels(): ngrok.disconnect(t.public_url)
+    !pkill ngrok || true
+except: pass
+
+# 3. Start Public Tunnel
+print("2️⃣ Connecting to Ngrok...")
+try:
+    # Use string format for the first argument to avoid "multiple values for addr" error
+    public_url = ngrok.connect(f"127.0.0.1:{PORT}", bind_tls=True).public_url
+    print(f"✅ NGROK CONNECTED: {public_url}")
+except Exception as e:
+    print(f"❌ NGROK FAILED: {e}")
+    public_url = "FAILED"
+
+# 4. Start Server in Background
+if public_url != "FAILED":
+    print("3️⃣ Starting Procr Engine (MinerU 2.5 Pro) in Background...")
+    
+    import subprocess, sys
+    
+    # Set globally in the notebook to ensure all VLLM child processes inherit it natively
+    os.environ["VLLM_USE_V1"] = "0"
+    os.environ["PYTHONPATH"] = "."
+    
+    with open("procr_server.log", "w") as log_file:
+        # sys.executable guarantees it uses the exact Python where pip installed the packages!
+        subprocess.Popen(
+            [
+                sys.executable, "-u", "-m", "uvicorn", "app.main:app", 
+                "--host", "127.0.0.1", 
+                "--port", str(PORT), 
+                "--timeout-keep-alive", "300", 
+                "--timeout-graceful-shutdown", "60"
+            ],
+            stdout=log_file,
+            stderr=log_file,
+            preexec_fn=os.setpgrp # Bypasses Kaggle's background process block
+        )
+
+    print("4️⃣ Waiting for VLM Eager Loading (Smart Polling)...")
+    start_time = time.time()
+    is_ready = False
+    while time.time() - start_time < 150: # Max timeout
+        if os.path.exists("procr_server.log"):
+            with open("procr_server.log", "r") as f:
+                content = f.read()
+                if "READY" in content:
+                    print(f"✅ Procr Engine is READY (in {int(time.time() - start_time)}s)!")
+                    is_ready = True
+                    break
+                if "Application startup failed" in content:
+                    print("❌ Server crashed during startup!")
+                    break
+        time.sleep(2)
+    
+    if not is_ready:
+        print("⚠️ Warning: Startup timed out or failed to find READY signal.")
+
+    print("\n" + "="*50)
+    print("📜 LATEST PROCR LOGS:")
+    !tail -n 20 procr_server.log
+    print("="*50 + "\n")
+
+    print(f"🚀 PROCR PUBLIC URL: {public_url}")
+    print("👉 Use this for Phase 2 testing!")
+else:
+    print("🛑 Script stopped because Ngrok failed.")
+
+
+
+
+
+
+!cat procr_server.log

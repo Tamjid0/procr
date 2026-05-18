@@ -1,3 +1,5 @@
+
+
 # === CELL 1: SETUP (PROCR V2 - MINERU 2.5 PRO) ===
 import os, shutil
 %cd /content
@@ -35,12 +37,20 @@ if numpy.__version__.startswith("1"):
 else:
     print("⚠️ WARNING: Numpy is still on 2.x. This may cause crashes.")
 
-print("📦 Step 5: Pre-downloading Model Weights (1.2B Pro)...")
+print("📦 Step 4: Pre-downloading Model Weights (1.2B Pro)...")
 # Pre-downloading avoids the massive delay during the first request
 from huggingface_hub import snapshot_download
 snapshot_download(repo_id="opendatalab/MinerU2.5-Pro-2604-1.2B")
 
 print("✅ Setup Complete. Proceed to Cell 2.")
+
+
+
+
+
+
+
+
 
 
 
@@ -50,14 +60,13 @@ from pyngrok import ngrok
 import os
 
 # 1. Configuration
-NGROK_TOKEN = "3D7DPWdOrmeJCvePwE6AvZitDQL_Uhmv7TGyTQvrNBXm1hCm"
+NGROK_TOKEN = "3DFRfOfHvai4O3lZZcAw1QaGRq5_7QVkSuon8wT2SE8Hq8VKf"
 PORT = 9001  # Using 9001 to avoid conflict with pyocr v1
 
-# 2. Cleanup & Memory Reset (Targeted to avoid Kaggle kernel restart)
-print("1️⃣ Cleaning up old sessions...")
+# 2. Cleanup & Memory Reset
+print("1️⃣ Aggressively cleaning up old sessions & GPU memory...")
 !fuser -k {PORT}/tcp || true
 !pkill -9 -f vllm || true
-!pkill -9 -f uvicorn || true
 !pkill -9 -f "python app/main.py" || true
 
 import torch, gc
@@ -65,7 +74,7 @@ gc.collect()
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
-    
+
 time.sleep(5) # Wait for hardware release
 ngrok.set_auth_token(NGROK_TOKEN)
 try:
@@ -85,8 +94,8 @@ except Exception as e:
 # 4. Start Server in Background
 if public_url != "FAILED":
     print("3️⃣ Starting Procr Engine (MinerU 2.5 Pro) in Background...")
-    # The FINAL fix for Ngrok stability and V0 engine speed
-    !nohup env PYTHONPATH=. VLLM_USE_V1=0 python -u -m uvicorn app.main:app --host 127.0.0.1 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
+    # Increased timeout for complex VLM inference
+    !nohup env PYTHONPATH=. python -u -m uvicorn app.main:app --host 0.0.0.0 --port {PORT} --timeout-keep-alive 300 --timeout-graceful-shutdown 60 > procr_server.log 2>&1 &
 
     print("4️⃣ Waiting for VLM Eager Loading (Smart Polling)...")
     start_time = time.time()
@@ -103,7 +112,7 @@ if public_url != "FAILED":
                     print("❌ Server crashed during startup!")
                     break
         time.sleep(2)
-    
+
     if not is_ready:
         print("⚠️ Warning: Startup timed out or failed to find READY signal.")
 
@@ -116,3 +125,10 @@ if public_url != "FAILED":
     print("👉 Use this for Phase 2 testing!")
 else:
     print("🛑 Script stopped because Ngrok failed.")
+
+
+
+
+
+!tail ocr_stats.log
+!cat procr_server.log
