@@ -22,7 +22,7 @@ print("📦 Step 1: Installing Magic-PDF...")
 !pip install --default-timeout=1000 --retries 10 magic-pdf==1.1.0 --quiet
 
 print("📦 Step 2: Installing MinerU VLM & vLLM Backend...")
-!pip install --default-timeout=1000 --retries 10 "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm>=0.6.0 --quiet
+!pip install --default-timeout=1000 --retries 10 "mineru-vl-utils[vllm]==0.2.6" qwen-vl-utils==0.0.8 vllm==0.6.2 --quiet
 
 print("📦 Step 3: Installing Transformers & Server Stack...")
 !pip install --default-timeout=1000 --retries 10 "transformers>=4.45.0" accelerate bitsandbytes scipy pyngrok nest-asyncio fastapi uvicorn python-multipart --quiet
