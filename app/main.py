@@ -57,7 +57,7 @@ async def process_page(request: OCRRequest):
         # --- SAFE PERFORMANCE TEST: Drop visual tokens by 60% ---
         # We downscale to 768px width (standard A4 ratio gives ~768x1024).
         # We preserve the original page_width and page_height for the adapter geometry mapping!
-        image.thumbnail((768, 1024), Image.Resampling.LANCZOS)
+        image.thumbnail((512, 680), Image.Resampling.LANCZOS)
         
         logger.info(f"📄 Image Decoded: {page_width}x{page_height} (Downscaled to {image.size[0]}x{image.size[1]} for 2s speed)")
         decode_time = time.perf_counter()
