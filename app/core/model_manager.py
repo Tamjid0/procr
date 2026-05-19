@@ -39,13 +39,12 @@ class ModelManager:
             logger.info("🔥 Hyper-tuning vLLM engine for T4 (Speed Mode)...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.90, # Restored to 0.90 for maximum KV Cache speed
-                max_num_seqs=8,
-                enforce_eager=False,          # Re-enabled CUDA Graphs for blazing-fast inference speed
-                max_model_len=8192,           # Reduced to 2048 to save memory
+                gpu_memory_utilization=0.90, # Extra buffer for CUDA Graphs
+                max_num_seqs=16,
+                enforce_eager=False,
+                max_model_len=8192,
                 enable_chunked_prefill=False,
-                trust_remote_code=True,
-                mm_processor_kwargs={"max_pixels": 282240} # Clamp resolution for 2s speed
+                trust_remote_code=True
             )
             
             # 2. Pass the pre-initialized engine to MinerU
