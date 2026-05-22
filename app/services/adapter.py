@@ -4,6 +4,23 @@ logger = logging.getLogger("procr")
 
 class MinerUAdapter:
     @staticmethod
+    def _remove_stutter(text):
+        """Detects and prunes verbatim text repetitions (VLM stutter)."""
+        if not text or len(text) < 20:
+            return text
+        
+        # Look for long repeated phrases (at least 15 chars)
+        # We check if the string ends with a repeat of a preceding segment
+        # e.g. "Line 1 Line 2 Line 1 Line 2" -> "Line 1 Line 2"
+        for length in range(len(text) // 2, 10, -1):
+            suffix = text[-length:]
+            preceding = text[-(2*length):-length]
+            if suffix == preceding:
+                logger.info(f"✂️ Pruning stutter: '{suffix[:30]}...'")
+                return text[:-length].strip()
+        return text
+
+    @staticmethod
     def transform(mineru_output, page_width, page_height, mineru_width=None, mineru_height=None):
         """
         Transforms MinerU 2.5 Pro JSON output into standardized DocumentGraph nodes.
@@ -39,9 +56,9 @@ class MinerUAdapter:
                 content = getattr(element, "content", "")
                 confidence = getattr(element, "confidence", 0.95)
             
-            # Ensure content is a string
+            # Ensure content is a string and prune stuttering
             if content is None: content = ""
-            content = str(content)
+            content = MinerUAdapter._remove_stutter(str(content).strip())
             
             # Smart Scaling Logic: Detect if VLM is using 0-1000 normalized coords (common for Qwen2-VL)
             # or raw/downscaled pixels.

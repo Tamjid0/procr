@@ -168,19 +168,33 @@ class OCRMerger:
             for row in rows: row.sort(key=lambda x: x[1]["bbox"]["x0"])
             rows.sort(key=lambda r: sum(x[1]["bbox"]["y0"] for x in r) / len(r))
             
+            # 5. Build list of merged paddle rows with IOU-based deduplication
             paddle_rows = []
             for row in rows:
-                x0 = min(x[1]["bbox"]["x0"] for x in row)
-                y0 = min(x[1]["bbox"]["y0"] for x in row)
-                x1 = max(x[1]["bbox"]["x1"] for x in row)
-                y1 = max(x[1]["bbox"]["y1"] for x in row)
-                row_text = " ".join(x[1]["text"] for x in row)
-                row_conf = sum(x[1]["confidence"] for x in row) / len(row)
+                # Deduplicate lines in the row that have high IOU (over 80%)
+                unique_row_lines = []
+                for idx, p_line in row:
+                    is_duplicate = False
+                    for _, existing_p in unique_row_lines:
+                        if OCRMerger._calculate_iou(p_line["bbox"], existing_p["bbox"]) > 0.8:
+                            is_duplicate = True
+                            break
+                    if not is_duplicate:
+                        unique_row_lines.append((idx, p_line))
+                
+                if not unique_row_lines: continue
+                
+                x0 = min(x[1]["bbox"]["x0"] for x in unique_row_lines)
+                y0 = min(x[1]["bbox"]["y0"] for x in unique_row_lines)
+                x1 = max(x[1]["bbox"]["x1"] for x in unique_row_lines)
+                y1 = max(x[1]["bbox"]["y1"] for x in unique_row_lines)
+                row_text = " ".join(x[1]["text"] for x in unique_row_lines)
+                row_conf = sum(x[1]["confidence"] for x in unique_row_lines) / len(unique_row_lines)
                 paddle_rows.append({
                     "text": row_text,
                     "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
                     "confidence": row_conf,
-                    "indices": [x[0] for x in row]
+                    "indices": [x[0] for x in unique_row_lines]
                 })
 
             # --- RESILIENT TEXT ALIGNMENT ---
