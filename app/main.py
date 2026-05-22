@@ -111,12 +111,15 @@ async def process_page(request: OCRRequest):
         mapping_time = time.perf_counter()
         
         # 4. Consolidate Text for the response
-        consolidated_text_lines = []
+        # Join lines within a region with \n and separate regions with \n\n
+        # This preserves markdown block structure: tables stay together, paragraphs are separated.
+        region_texts = []
         for reg in final_data["extracted_regions"]:
-            for line in reg.get("extracted_lines", []):
-                consolidated_text_lines.append(line.get("text", ""))
+            lines = [line.get("text", "") for line in reg.get("extracted_lines", []) if line.get("text", "").strip()]
+            if lines:
+                region_texts.append("\n".join(lines))
         
-        consolidated_text = "\n".join(consolidated_text_lines)
+        consolidated_text = "\n\n".join(region_texts)
 
         # Performance Logging
         total_time = mapping_time - start_time
