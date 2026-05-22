@@ -4,7 +4,7 @@ logger = logging.getLogger("procr")
 
 class MinerUAdapter:
     @staticmethod
-    def transform(mineru_output, page_width, page_height):
+    def transform(mineru_output, page_width, page_height, mineru_width=None, mineru_height=None):
         """
         Transforms MinerU 2.5 Pro JSON output into standardized DocumentGraph nodes.
         
@@ -12,7 +12,15 @@ class MinerUAdapter:
             mineru_output (list): List of elements from MinerUClient.
             page_width (int): Original image width.
             page_height (int): Original image height.
+            mineru_width (int): Downscaled width used for VLM inference.
+            mineru_height (int): Downscaled height used for VLM inference.
         """
+        # If thumbnail dimensions aren't provided, fallback to original dimensions
+        if mineru_width is None:
+            mineru_width = page_width
+        if mineru_height is None:
+            mineru_height = page_height
+
         extracted_regions = []
         
         # In MinerU 2.5, the output is often a list of blocks.
@@ -36,24 +44,27 @@ class MinerUAdapter:
             content = str(content)
             
             # Smart Scaling Logic: Detect if VLM is using 0-1000 normalized coords (common for Qwen2-VL)
-            # or raw pixels.
+            # or raw/downscaled pixels.
             is_normalized = all(v <= 1000 for v in bbox) and any(v > 1 for v in bbox)
             
-            if is_normalized:
-                # Scale 0-1000 -> Pixels
+            if is_normalized and any(v > mineru_width and v > mineru_height for v in bbox):
+                # Scale 0-1000 -> Original Pixels
                 x0 = round((bbox[0] / 1000) * page_width)
                 y0 = round((bbox[1] / 1000) * page_height)
                 x1 = round((bbox[2] / 1000) * page_width)
                 y1 = round((bbox[3] / 1000) * page_height)
+            elif all(v <= 1.0 for v in bbox):
+                # Scale 0-1 -> Original Pixels
+                x0 = round(bbox[0] * page_width)
+                y0 = round(bbox[1] * page_height)
+                x1 = round(bbox[2] * page_width)
+                y1 = round(bbox[3] * page_height)
             else:
-                # Keep as raw pixels (or scale if they were 0-1)
-                if all(v <= 1 for v in bbox):
-                    x0 = round(bbox[0] * page_width)
-                    y0 = round(bbox[1] * page_height)
-                    x1 = round(bbox[2] * page_width)
-                    y1 = round(bbox[3] * page_height)
-                else:
-                    x0, y0, x1, y1 = [round(v) for v in bbox]
+                # Scale from downscaled/thumbnail pixels -> Original Pixels
+                x0 = round((bbox[0] / mineru_width) * page_width)
+                y0 = round((bbox[1] / mineru_height) * page_height)
+                x1 = round((bbox[2] / mineru_width) * page_width)
+                y1 = round((bbox[3] / mineru_height) * page_height)
 
             # --- MATH TUNING ---
             # If it's a math/equation block, shift it up and tighten it

@@ -60,8 +60,9 @@ async def process_page(request: OCRRequest):
         # For MinerU, we downscale.
         mineru_image = image.copy()
         mineru_image.thumbnail((512, 680), Image.Resampling.LANCZOS)
+        mineru_width, mineru_height = mineru_image.size
         
-        logger.info(f"📄 Image Decoded: {page_width}x{page_height}")
+        logger.info(f"📄 Image Decoded: {page_width}x{page_height} | Downscaled MinerU Image: {mineru_width}x{mineru_height}")
         decode_time = time.perf_counter()
         
         # 2. Run OCR Tasks Concurrently
@@ -97,7 +98,13 @@ async def process_page(request: OCRRequest):
         logger.info("🎯 Merging results...")
         
         # Transform MinerU output first
-        structured_data = MinerUAdapter.transform(mineru_output, page_width, page_height)
+        structured_data = MinerUAdapter.transform(
+            mineru_output, 
+            page_width, 
+            page_height, 
+            mineru_width=mineru_width, 
+            mineru_height=mineru_height
+        )
         
         # Merge with PaddleOCR lines
         final_data = OCRMerger.merge(structured_data, paddle_output)

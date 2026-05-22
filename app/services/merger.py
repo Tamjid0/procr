@@ -53,9 +53,51 @@ class OCRMerger:
 
             # If we found matches, replace the "fake" lines in the region
             if matched_lines:
-                # Sort matched lines by Y coordinate
-                matched_lines.sort(key=lambda x: x["bbox"]["y0"])
-                region["extracted_lines"] = matched_lines
+                # Robust Y-first-then-X reading order sorting:
+                # We group lines into visual rows based on vertical overlap (> 50%).
+                # This correctly preserves the top-to-bottom reading order for single-column
+                # text blocks, while ordering multiple horizontally aligned segments (like tables
+                # or inline blocks) left-to-right.
+                
+                # 1. Sort lines primarily by y0 to process top-down
+                lines_sorted_by_y = sorted(matched_lines, key=lambda x: x["bbox"]["y0"])
+                
+                # 2. Cluster into visual rows
+                rows = []
+                for line in lines_sorted_by_y:
+                    bbox = line["bbox"]
+                    h = bbox["y1"] - bbox["y0"]
+                    placed = False
+                    for row in rows:
+                        row_bbox = row[0]["bbox"]
+                        row_h = row_bbox["y1"] - row_bbox["y0"]
+                        
+                        # Calculate vertical overlap
+                        overlap = min(bbox["y1"], row_bbox["y1"]) - max(bbox["y0"], row_bbox["y0"])
+                        min_h = min(h, row_h)
+                        
+                        # If vertical overlap is more than 50% of the smaller line height,
+                        # they are in the same visual row.
+                        if min_h > 0 and overlap > 0.5 * min_h:
+                            row.append(line)
+                            placed = True
+                            break
+                    if not placed:
+                        rows.append([line])
+                
+                # 3. Sort elements within each row by x0 (left-to-right)
+                for row in rows:
+                    row.sort(key=lambda x: x["bbox"]["x0"])
+                
+                # 4. Sort rows by the average y0 coordinate of their elements
+                rows.sort(key=lambda r: sum(x["bbox"]["y0"] for x in r) / len(r))
+                
+                # 5. Flatten the sorted rows back into a single list
+                final_sorted_lines = []
+                for row in rows:
+                    final_sorted_lines.extend(row)
+                    
+                region["extracted_lines"] = final_sorted_lines
                 
             merged_regions.append(region)
 

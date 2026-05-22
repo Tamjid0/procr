@@ -1,0 +1,664 @@
+{
+  "page_width": 374,
+  "page_height": 135,
+  "extracted_regions": [
+    {
+      "region_id": "mineru-block-1",
+      "region_index": 0,
+      "region_type": "text",
+      "bbox": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 374,
+        "y1": 135
+      },
+      "confidence_score": 0.9,
+      "extracted_lines": [
+        {
+          "text": "GeeksforGeeks",
+          "bbox": {
+            "x0": 125,
+            "y0": 3,
+            "x1": 248,
+            "y1": 18
+          },
+          "confidence_score": 0.9969241619110107,
+          "style": {
+            "font_size": 12.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "A computer science portal for geeks",
+          "bbox": {
+            "x0": 129,
+            "y0": 21,
+            "x1": 246,
+            "y1": 32
+          },
+          "confidence_score": 0.9906892776489258,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Sudo Placement Prepare",
+          "bbox": {
+            "x0": 2,
+            "y0": 49,
+            "x1": 91,
+            "y1": 59
+          },
+          "confidence_score": 0.9461565017700195,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "question likely to be",
+          "bbox": {
+            "x0": 95,
+            "y0": 49,
+            "x1": 193,
+            "y1": 59
+          },
+          "confidence_score": 0.9085023999214172,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "basically three different",
+          "bbox": {
+            "x0": 189,
+            "y0": 49,
+            "x1": 286,
+            "y1": 59
+          },
+          "confidence_score": 0.8947988748550415,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "the above categories have",
+          "bbox": {
+            "x0": 282,
+            "y0": 49,
+            "x1": 372,
+            "y1": 59
+          },
+          "confidence_score": 0.9818581342697144,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "for tbe Recnaitment drive",
+          "bbox": {
+            "x0": 2,
+            "y0": 58,
+            "x1": 92,
+            "y1": 69
+          },
+          "confidence_score": 0.7998824119567871,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "asked in tbe interviews ",
+          "bbox": {
+            "x0": 96,
+            "y0": 58,
+            "x1": 185,
+            "y1": 69
+          },
+          "confidence_score": 0.7864012718200684,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "categories ito which ",
+          "bbox": {
+            "x0": 189,
+            "y0": 58,
+            "x1": 281,
+            "y1": 69
+          },
+          "confidence_score": 0.8095945715904236,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "teir own reruit",
+          "bbox": {
+            "x0": 282,
+            "y0": 58,
+            "x1": 372,
+            "y1": 69
+          },
+          "confidence_score": 0.7510296702384949,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "based",
+          "bbox": {
+            "x0": 67,
+            "y0": 64,
+            "x1": 91,
+            "y1": 78
+          },
+          "confidence_score": 0.9818833470344543,
+          "style": {
+            "font_size": 11.2,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "make your upcoming",
+          "bbox": {
+            "x0": 96,
+            "y0": 66,
+            "x1": 185,
+            "y1": 77
+          },
+          "confidence_score": 0.949566125869751,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "product",
+          "bbox": {
+            "x0": 25,
+            "y0": 68,
+            "x1": 59,
+            "y1": 78
+          },
+          "confidence_score": 0.9483160972595215,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "can divide the companies",
+          "bbox": {
+            "x0": 190,
+            "y0": 68,
+            "x1": 279,
+            "y1": 78
+          },
+          "confidence_score": 0.9825651049613953,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "process. In this course,",
+          "bbox": {
+            "x0": 283,
+            "y0": 68,
+            "x1": 372,
+            "y1": 78
+          },
+          "confidence_score": 0.8874295353889465,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "of",
+          "bbox": {
+            "x0": 3,
+            "y0": 69,
+            "x1": 15,
+            "y1": 77
+          },
+          "confidence_score": 0.9968589544296265,
+          "style": {
+            "font_size": 6.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "companies like Microsoft,",
+          "bbox": {
+            "x0": 3,
+            "y0": 77,
+            "x1": 92,
+            "y1": 88
+          },
+          "confidence_score": 0.9698899984359741,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "visitingcampuses for",
+          "bbox": {
+            "x0": 190,
+            "y0": 77,
+            "x1": 279,
+            "y1": 88
+          },
+          "confidence_score": 0.9246021509170532,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "we will try to cover every",
+          "bbox": {
+            "x0": 283,
+            "y0": 77,
+            "x1": 372,
+            "y1": 88
+          },
+          "confidence_score": 0.8727667927742004,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "placement",
+          "bbox": {
+            "x0": 97,
+            "y0": 78,
+            "x1": 133,
+            "y1": 85
+          },
+          "confidence_score": 0.9614839553833008,
+          "style": {
+            "font_size": 5.6,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "season",
+          "bbox": {
+            "x0": 160,
+            "y0": 78,
+            "x1": 184,
+            "y1": 85
+          },
+          "confidence_score": 0.9929402470588684,
+          "style": {
+            "font_size": 5.6,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Amazou.Adobe etc with",
+          "bbox": {
+            "x0": 2,
+            "y0": 84,
+            "x1": 91,
+            "y1": 95
+          },
+          "confidence_score": 0.8127039670944214,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "possible dtail reqrd to",
+          "bbox": {
+            "x0": 282,
+            "y0": 84,
+            "x1": 373,
+            "y1": 98
+          },
+          "confidence_score": 0.7251466512680054,
+          "style": {
+            "font_size": 11.2,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "placements based on their",
+          "bbox": {
+            "x0": 190,
+            "y0": 85,
+            "x1": 279,
+            "y1": 96
+          },
+          "confidence_score": 0.8011714220046997,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "recrimet process.Mass",
+          "bbox": {
+            "x0": 189,
+            "y0": 94,
+            "x1": 279,
+            "y1": 107
+          },
+          "confidence_score": 0.6917783617973328,
+          "style": {
+            "font_size": 10.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "a free ouline placement",
+          "bbox": {
+            "x0": 2,
+            "y0": 96,
+            "x1": 92,
+            "y1": 107
+          },
+          "confidence_score": 0.8500743508338928,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Placement.",
+          "bbox": {
+            "x0": 96,
+            "y0": 96,
+            "x1": 134,
+            "y1": 107
+          },
+          "confidence_score": 0.9491788148880005,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "preparatica",
+          "bbox": {
+            "x0": 144,
+            "y0": 96,
+            "x1": 185,
+            "y1": 107
+          },
+          "confidence_score": 0.9117345213890076,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "knowfor",
+          "bbox": {
+            "x0": 283,
+            "y0": 96,
+            "x1": 330,
+            "y1": 107
+          },
+          "confidence_score": 0.8626600503921509,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "cracking",
+          "bbox": {
+            "x0": 332,
+            "y0": 96,
+            "x1": 372,
+            "y1": 107
+          },
+          "confidence_score": 0.9599132537841797,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "preparation cose. The",
+          "bbox": {
+            "x0": 1,
+            "y0": 103,
+            "x1": 92,
+            "y1": 116
+          },
+          "confidence_score": 0.793441891670227,
+          "style": {
+            "font_size": 10.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "solely depends on the",
+          "bbox": {
+            "x0": 97,
+            "y0": 104,
+            "x1": 185,
+            "y1": 115
+          },
+          "confidence_score": 0.8801692724227905,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "RecruitersTech Gis",
+          "bbox": {
+            "x0": 190,
+            "y0": 104,
+            "x1": 278,
+            "y1": 115
+          },
+          "confidence_score": 0.8441989421844482,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "interview",
+          "bbox": {
+            "x0": 283,
+            "y0": 105,
+            "x1": 319,
+            "y1": 116
+          },
+          "confidence_score": 0.9269154667854309,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "ef",
+          "bbox": {
+            "x0": 332,
+            "y0": 105,
+            "x1": 347,
+            "y1": 113
+          },
+          "confidence_score": 0.7924014925956726,
+          "style": {
+            "font_size": 6.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "company for which you",
+          "bbox": {
+            "x0": 96,
+            "y0": 113,
+            "x1": 185,
+            "y1": 126
+          },
+          "confidence_score": 0.9038739800453186,
+          "style": {
+            "font_size": 10.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "course focases ou various",
+          "bbox": {
+            "x0": 3,
+            "y0": 114,
+            "x1": 92,
+            "y1": 124
+          },
+          "confidence_score": 0.8163264393806458,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Others.",
+          "bbox": {
+            "x0": 190,
+            "y0": 114,
+            "x1": 216,
+            "y1": 124
+          },
+          "confidence_score": 0.9328131079673767,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Start-ups",
+          "bbox": {
+            "x0": 245,
+            "y0": 114,
+            "x1": 278,
+            "y1": 124
+          },
+          "confidence_score": 0.9690966010093689,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "companies falling in each",
+          "bbox": {
+            "x0": 284,
+            "y0": 114,
+            "x1": 372,
+            "y1": 124
+          },
+          "confidence_score": 0.9357051253318787,
+          "style": {
+            "font_size": 8.0,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "MCQ's",
+          "bbox": {
+            "x0": 2,
+            "y0": 122,
+            "x1": 30,
+            "y1": 133
+          },
+          "confidence_score": 0.8589043617248535,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "are preparing. There are",
+          "bbox": {
+            "x0": 96,
+            "y0": 123,
+            "x1": 185,
+            "y1": 134
+          },
+          "confidence_score": 0.9015836119651794,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "of the above categories",
+          "bbox": {
+            "x0": 283,
+            "y0": 123,
+            "x1": 363,
+            "y1": 134
+          },
+          "confidence_score": 0.9258954524993896,
+          "style": {
+            "font_size": 8.8,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "&",
+          "bbox": {
+            "x0": 38,
+            "y0": 124,
+            "x1": 52,
+            "y1": 132
+          },
+          "confidence_score": 0.9804271459579468,
+          "style": {
+            "font_size": 6.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Coding",
+          "bbox": {
+            "x0": 63,
+            "y0": 124,
+            "x1": 91,
+            "y1": 132
+          },
+          "confidence_score": 0.9945022463798523,
+          "style": {
+            "font_size": 6.4,
+            "is_bold": false
+          }
+        },
+        {
+          "text": "Companies.belcuging to",
+          "bbox": {
+            "x0": 190,
+            "y0": 124,
+            "x1": 278,
+            "y1": 132
+          },
+          "confidence_score": 0.8840223550796509,
+          "style": {
+            "font_size": 6.4,
+            "is_bold": false
+          }
+        }
+      ]
+    }
+  ]
+}
