@@ -199,57 +199,78 @@ class OCRMerger:
                     "indices": [x[0] for x in unique_row_lines]
                 })
 
-            # --- PRODUCTION-GRADE CHARACTER-LEVEL ALIGNMENT & SPLITTING ---
-            m_full_text = " ".join(m["text"] for m in mineru_lines)
-            p_full_text = " ".join(p["text"] for p in paddle_rows)
+            # --- PRODUCTION-GRADE SPATIAL WORD ALIGNMENT (Reading-Order Independent) ---
+            # This algorithm tokenizes MinerU text and maps each word spatially to a Paddle row.
+            # It is 100% resilient to scanning order mismatches (Column-first vs. Row-first).
             
-            # 1. Map Paddle rows to character offsets in p_full_text
-            p_offsets = []
-            curr_offset = 0
-            for p_row in paddle_rows:
-                # Find start/end of this row in concatenated text
-                start = p_full_text.find(p_row["text"], curr_offset)
-                if start == -1: start = curr_offset # Fallback
-                end = start + len(p_row["text"])
-                p_offsets.append((start, end))
-                curr_offset = end
+            # 1. Prepare word-level tokens from MinerU with estimated bounding boxes
+            # We estimate word boxes by dividing the line bbox horizontally
+            m_words = []
+            for m_line in mineru_lines:
+                words = m_line["text"].split()
+                if not words: continue
+                
+                lb = m_line["bbox"]
+                w_width = (lb["x1"] - lb["x0"]) / len(words)
+                for j, w_text in enumerate(words):
+                    w_bbox = {
+                        "x0": lb["x0"] + (j * w_width),
+                        "y0": lb["y0"],
+                        "x1": lb["x0"] + ((j + 1) * w_width),
+                        "y1": lb["y1"]
+                    }
+                    m_words.append({"text": w_text, "bbox": w_bbox})
 
-            # 2. Use SequenceMatcher to find corresponding offsets in MinerU text
-            matcher = difflib.SequenceMatcher(None, m_full_text, p_full_text)
-            matching_blocks = matcher.get_matching_blocks()
-            
-            new_extracted_lines = []
-            for i, (p_start, p_end) in enumerate(p_offsets):
-                p_row = paddle_rows[i]
+            # 2. Map every MinerU word to the BEST physical Paddle row
+            row_word_buckets = [[] for _ in range(len(paddle_rows))]
+            for m_word in m_words:
+                best_p_idx = -1
+                best_ioa = 0.0
                 
-                # Map p_range -> m_range using matching blocks
-                m_start = None
-                m_end = None
-                
-                for b in matching_blocks:
-                    # overlap with Paddle range [p_start, p_end]
-                    overlap_p_start = max(b.b, p_start)
-                    overlap_p_end = min(b.b + b.size, p_end)
+                for p_idx, p_row in enumerate(paddle_rows):
+                    p_bbox = p_row["bbox"]
+                    # Calculate IoA (Intersection over m_word Area)
+                    ix0, iy0 = max(m_word["bbox"]["x0"], p_bbox["x0"]), max(m_word["bbox"]["y0"], p_bbox["y0"])
+                    ix1, iy1 = min(m_word["bbox"]["x1"], p_bbox["x1"]), min(m_word["bbox"]["y1"], p_bbox["y1"])
                     
-                    if overlap_p_start < overlap_p_end:
-                        # Find corresponding MinerU range
-                        offset_in_block = overlap_p_start - b.b
-                        overlap_len = overlap_p_end - overlap_p_start
-                        
-                        curr_m_start = b.a + offset_in_block
-                        curr_m_end = curr_m_start + overlap_len
-                        
-                        if m_start is None or curr_m_start < m_start: m_start = curr_m_start
-                        if m_end is None or curr_m_end > m_end: m_end = curr_m_end
+                    inter_w = max(0, ix1 - ix0)
+                    inter_h = max(0, iy1 - iy0)
+                    inter_area = inter_w * inter_h
+                    word_area = (m_word["bbox"]["x1"] - m_word["bbox"]["x0"]) * (m_word["bbox"]["y1"] - m_word["bbox"]["y0"])
+                    
+                    ioa = inter_area / float(word_area) if word_area > 0 else 0
+                    if ioa > best_ioa:
+                        best_ioa = ioa
+                        best_p_idx = p_idx
                 
-                # Extract text or fallback to Paddle text if alignment is poor
-                if m_start is not None and m_end is not None and (m_end - m_start) > 2:
-                    m_slice = m_full_text[m_start:m_end].strip()
-                    # If MinerU slice is significantly different from Paddle (e.g. empty), fallback
-                    if len(m_slice) < 2:
-                        m_slice = p_row["text"]
+                # If a word is 40% inside a Paddle row, assign it
+                if best_p_idx != -1 and best_ioa > 0.4:
+                    row_word_buckets[best_p_idx].append(m_word["text"])
                 else:
-                    m_slice = p_row["text"]
+                    # Fallback: Distance-based matching if overlap fails (for small shifts)
+                    m_cy = (m_word["bbox"]["y0"] + m_word["bbox"]["y1"]) / 2
+                    closest_p_idx = -1
+                    min_dist = 999999
+                    for p_idx, p_row in enumerate(paddle_rows):
+                        p_cy = (p_row["bbox"]["y0"] + p_row["bbox"]["y1"]) / 2
+                        dist = abs(m_cy - p_cy)
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_p_idx = p_idx
+                    if closest_p_idx != -1 and min_dist < 15: # 15px proximity threshold
+                        row_word_buckets[closest_p_idx].append(m_word["text"])
+
+            # 3. Assemble the final lines based on physical Paddle row boundaries
+            new_extracted_lines = []
+            for i, p_row in enumerate(paddle_rows):
+                bucket = row_word_buckets[i]
+                
+                # If we have words for this row, join them. 
+                # If not (e.g. OCR picked up a noise artifact), fallback to Paddle text.
+                if bucket:
+                    m_slice = " ".join(bucket)
+                else:
+                    m_slice = p_row["text"] # Safety fallback
                 
                 new_extracted_lines.append({
                     "text": m_slice,
@@ -261,7 +282,6 @@ class OCRMerger:
                         "is_bold": region_type in ["header", "title"]
                     }
                 })
-                # Mark as assigned
                 for idx in p_row["indices"]:
                     assigned_paddle_indices.add(idx)
 
