@@ -103,27 +103,19 @@ class MinerUAdapter:
                 "extracted_lines": []
             }
             
-            # If the block has text, split by newline to create atomic lines for citations
+            # ── PILLAR C V6.1: Raw Block Passing ──
+            # We stop pre-slicing into lines here. We pass the whole text block to the merger.
+            # merger.py now handles character-level splitting based on PHYSICAL PaddleOCR lines.
             if content.strip():
-                lines = content.split('\n')
-                for l_idx, line_text in enumerate(lines):
-                    if not line_text.strip():
-                        continue
-                        
-                    line_count = max(1, len(lines))
-                    line_h = (y1 - y0) / line_count
-                    line_y0 = round(y0 + (l_idx * line_h))
-                    line_y1 = round(line_y0 + line_h)
-                    
-                    region["extracted_lines"].append({
-                        "text": line_text.strip(),
-                        "bbox": {"x0": x0, "y0": line_y0, "x1": x1, "y1": line_y1},
-                        "confidence_score": float(confidence),
-                        "style": {
-                            "font_size": round(line_h * 0.8, 2),
-                            "is_bold": etype in ["header", "title"]
-                        }
-                    })
+                region["extracted_lines"].append({
+                    "text": content.strip(),
+                    "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+                    "confidence_score": float(confidence),
+                    "style": {
+                        "font_size": 12, # Placeholder, merger will refine
+                        "is_bold": etype in ["header", "title"]
+                    }
+                })
                 
             extracted_regions.append(region)
             
