@@ -196,93 +196,72 @@ class OCRMerger:
                     "indices": [x[0] for x in unique_row_lines]
                 })
 
-            # --- RESILIENT TEXT ALIGNMENT ---
-            cleaned_mineru = [OCRMerger._clean_text(m["text"]) for m in mineru_lines]
-            cleaned_paddle = [OCRMerger._clean_text(p["text"]) for p in paddle_rows]
+            # --- PRODUCTION-GRADE CHARACTER-LEVEL ALIGNMENT & SPLITTING ---
+            m_full_text = " ".join(m["text"] for m in mineru_lines)
+            p_full_text = " ".join(p["text"] for p in paddle_rows)
             
-            mapping = {} # mineru_idx -> paddle_row_idx
+            # 1. Map Paddle rows to character offsets in p_full_text
+            p_offsets = []
+            curr_offset = 0
+            for p_row in paddle_rows:
+                # Find start/end of this row in concatenated text
+                start = p_full_text.find(p_row["text"], curr_offset)
+                if start == -1: start = curr_offset # Fallback
+                end = start + len(p_row["text"])
+                p_offsets.append((start, end))
+                curr_offset = end
+
+            # 2. Use SequenceMatcher to find corresponding offsets in MinerU text
+            matcher = difflib.SequenceMatcher(None, m_full_text, p_full_text)
+            matching_blocks = matcher.get_matching_blocks()
             
-            # Use a more flexible scoring for short strings and allow slight out-of-order 
-            # for multi-column jitter if needed, but maintain sequential priority.
-            last_p_idx = -1
-            for m_idx, m_text in enumerate(cleaned_mineru):
-                if len(m_text) < 2: continue # Skip single chars
+            new_extracted_lines = []
+            for i, (p_start, p_end) in enumerate(p_offsets):
+                p_row = paddle_rows[i]
                 
-                best_p_idx = None
-                best_score = 0.0
+                # Map p_range -> m_range using matching blocks
+                m_start = None
+                m_end = None
                 
-                # Search window: check a few rows ahead to prevent getting stuck
-                search_limit = min(last_p_idx + 4, len(paddle_rows))
-                for p_idx in range(last_p_idx + 1, search_limit):
-                    p_row = paddle_rows[p_idx]
-                    p_text = cleaned_paddle[p_idx]
+                for b in matching_blocks:
+                    # overlap with Paddle range [p_start, p_end]
+                    overlap_p_start = max(b.b, p_start)
+                    overlap_p_end = min(b.b + b.size, p_end)
                     
-                    # Exact or Substring match
-                    if m_text == p_text or m_text in p_text or p_text in m_text:
-                        score = 0.9 + 0.1 * (min(len(m_text), len(p_text)) / max(len(m_text), len(p_text)))
-                    else:
-                        score = difflib.SequenceMatcher(None, m_text, p_text).ratio()
+                    if overlap_p_start < overlap_p_end:
+                        # Find corresponding MinerU range
+                        offset_in_block = overlap_p_start - b.b
+                        overlap_len = overlap_p_end - overlap_p_start
                         
-                    # --- SPATIAL HEURISTICS ---
-                    # 1. Vertical Distance Penalty: If the physical row is far from the expected position, penalize
-                    m_bbox = mineru_lines[m_idx]["bbox"]
-                    p_bbox = p_row["bbox"]
-                    m_cy = (m_bbox["y0"] + m_bbox["y1"]) / 2
-                    p_cy = (p_bbox["y0"] + p_bbox["y1"]) / 2
-                    v_dist = abs(m_cy - p_cy)
-                    
-                    # Normalize distance by region height (if region height is 0, skip)
-                    region_h = max(1, block_bbox["y1"] - block_bbox["y0"])
-                    dist_factor = v_dist / region_h
-                    if dist_factor > 0.1: # If more than 10% of region height away
-                        score -= (dist_factor * 0.5)
-
-                    # 2. Heuristic boost for short strings if they are visually close
-                    if len(m_text) < 5 and score > 0.6 and dist_factor < 0.05:
-                        score += 0.2
-
-                    if score > best_score and score >= 0.45:
-                        best_score = score
-                        best_p_idx = p_idx
+                        curr_m_start = b.a + offset_in_block
+                        curr_m_end = curr_m_start + overlap_len
                         
-                if best_p_idx is not None:
-                    mapping[m_idx] = best_p_idx
-                    last_p_idx = best_p_idx
-                    for idx in paddle_rows[best_p_idx]["indices"]:
-                        assigned_paddle_indices.add(idx)
-
-            # --- VERTICAL INTERPOLATION & FALLBACK ---
-            for m_idx, m_line in enumerate(mineru_lines):
-                if m_idx in mapping:
-                    p_row = paddle_rows[mapping[m_idx]]
-                    m_line["bbox"] = p_row["bbox"]
-                    m_line["confidence_score"] = p_row["confidence"]
+                        if m_start is None or curr_m_start < m_start: m_start = curr_m_start
+                        if m_end is None or curr_m_end > m_end: m_end = curr_m_end
+                
+                # Extract text or fallback to Paddle text if alignment is poor
+                if m_start is not None and m_end is not None and (m_end - m_start) > 2:
+                    m_slice = m_full_text[m_start:m_end].strip()
+                    # If MinerU slice is significantly different from Paddle (e.g. empty), fallback
+                    if len(m_slice) < 2:
+                        m_slice = p_row["text"]
                 else:
-                    # Interpolate using surrounding matched lines
-                    above_indices = [i for i in mapping if i < m_idx]
-                    below_indices = [i for i in mapping if i > m_idx]
-                    
-                    if above_indices and below_indices:
-                        a = max(above_indices)
-                        b = min(below_indices)
-                        bbox_a = mineru_lines[a]["bbox"]
-                        bbox_b = mineru_lines[b]["bbox"]
-                        factor = (m_idx - a) / (b - a)
-                        y0 = round(bbox_a["y1"] + factor * (bbox_b["y0"] - bbox_a["y1"]))
-                        h = (bbox_a["y1"] - bbox_a["y0"] + bbox_b["y1"] - bbox_b["y0"]) / 2
-                        m_line["bbox"] = {"x0": block_bbox["x0"], "y0": y0, "x1": block_bbox["x1"], "y1": round(y0 + h)}
-                    elif above_indices:
-                        bbox_a = mineru_lines[max(above_indices)]["bbox"]
-                        h = bbox_a["y1"] - bbox_a["y0"]
-                        y0 = bbox_a["y1"] + 2
-                        m_line["bbox"] = {"x0": block_bbox["x0"], "y0": y0, "x1": block_bbox["x1"], "y1": round(y0 + h)}
-                    elif below_indices:
-                        bbox_b = mineru_lines[min(below_indices)]["bbox"]
-                        h = bbox_b["y1"] - bbox_b["y0"]
-                        y1 = bbox_b["y0"] - 2
-                        m_line["bbox"] = {"x0": block_bbox["x0"], "y0": round(y1 - h), "x1": block_bbox["x1"], "y1": y1}
+                    m_slice = p_row["text"]
+                
+                new_extracted_lines.append({
+                    "text": m_slice,
+                    "bbox": p_row["bbox"],
+                    "confidence_score": p_row["confidence"],
+                    "style": {
+                        "font_size": round((p_row["bbox"]["y1"] - p_row["bbox"]["y0"]) * 0.8, 2),
+                        "is_bold": region_type in ["header", "title"]
+                    }
+                })
+                # Mark as assigned
+                for idx in p_row["indices"]:
+                    assigned_paddle_indices.add(idx)
 
-            region["extracted_lines"] = mineru_lines
+            region["extracted_lines"] = new_extracted_lines
             merged_regions.append(region)
 
         # Orphan Harvesting (Unchanged)
