@@ -105,12 +105,11 @@ class OCRMerger:
                             overlap = min(bbox["y1"], row_bbox["y1"]) - max(bbox["y0"], row_bbox["y0"])
                             min_h = min(h, row_h)
                             if min_h > 0 and overlap > 0.5 * min_h:
-                                # COLUMN GUARD: Don't merge if horizontal gap is too large
+                                # COLUMN GUARD: Stricter gap limit (10% of block width) to prevent column merging
                                 row.sort(key=lambda x: x[1]["bbox"]["x0"])
-                                left_x = row[0][1]["bbox"]["x0"]
                                 right_x = row[-1][1]["bbox"]["x1"]
                                 gap = max(0, bbox["x0"] - right_x)
-                                if gap < (block_bbox["x1"] - block_bbox["x0"]) * 0.2: # 20% width gap limit
+                                if gap < (block_bbox["x1"] - block_bbox["x0"]) * 0.1:
                                     row.append((idx, p_line))
                                     placed = True
                                     break
@@ -158,7 +157,7 @@ class OCRMerger:
                         right_x = row[-1][1]["bbox"]["x1"]
                         gap = max(0, bbox["x0"] - right_x)
                         # Only merge if gap is small (prevents multi-column merging)
-                        if gap < (block_bbox["x1"] - block_bbox["x0"]) * 0.15:
+                        if gap < (block_bbox["x1"] - block_bbox["x0"]) * 0.08:
                             row.append((idx, p_line))
                             placed = True
                             break
@@ -215,6 +214,7 @@ class OCRMerger:
                 # Search window: check a few rows ahead to prevent getting stuck
                 search_limit = min(last_p_idx + 4, len(paddle_rows))
                 for p_idx in range(last_p_idx + 1, search_limit):
+                    p_row = paddle_rows[p_idx]
                     p_text = cleaned_paddle[p_idx]
                     
                     # Exact or Substring match
@@ -223,8 +223,22 @@ class OCRMerger:
                     else:
                         score = difflib.SequenceMatcher(None, m_text, p_text).ratio()
                         
-                    # Heuristic boost for short strings if they are visually close
-                    if len(m_text) < 5 and score > 0.6:
+                    # --- SPATIAL HEURISTICS ---
+                    # 1. Vertical Distance Penalty: If the physical row is far from the expected position, penalize
+                    m_bbox = mineru_lines[m_idx]["bbox"]
+                    p_bbox = p_row["bbox"]
+                    m_cy = (m_bbox["y0"] + m_bbox["y1"]) / 2
+                    p_cy = (p_bbox["y0"] + p_bbox["y1"]) / 2
+                    v_dist = abs(m_cy - p_cy)
+                    
+                    # Normalize distance by region height (if region height is 0, skip)
+                    region_h = max(1, block_bbox["y1"] - block_bbox["y0"])
+                    dist_factor = v_dist / region_h
+                    if dist_factor > 0.1: # If more than 10% of region height away
+                        score -= (dist_factor * 0.5)
+
+                    # 2. Heuristic boost for short strings if they are visually close
+                    if len(m_text) < 5 and score > 0.6 and dist_factor < 0.05:
                         score += 0.2
 
                     if score > best_score and score >= 0.45:
