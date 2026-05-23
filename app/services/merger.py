@@ -10,7 +10,9 @@ class OCRMerger:
         if not text:
             return ""
         # Remove markdown characters like | - * # [ ] ( ) ` _ +
+        # Specifically target table artifacts for better matching scores
         cleaned = re.sub(r'[\|`\-*#_\+\[\]\(\)\{\}]', ' ', text)
+        cleaned = re.sub(r'\s*-+\s*\|\s*-+\s*', ' ', cleaned) # Strip table separators
         cleaned = ' '.join(cleaned.split())
         return cleaned.lower()
 
@@ -125,6 +127,7 @@ class OCRMerger:
                             final_lines.append({
                                 "text": p_line["text"],
                                 "bbox": p_line["bbox"],
+                                "parent_bbox": block_bbox,
                                 "confidence_score": p_line["confidence"],
                                 "style": {
                                     "font_size": round((p_line["bbox"]["y1"] - p_line["bbox"]["y0"]) * 0.8, 2),
@@ -251,6 +254,7 @@ class OCRMerger:
                 new_extracted_lines.append({
                     "text": m_slice,
                     "bbox": p_row["bbox"],
+                    "parent_bbox": block_bbox,
                     "confidence_score": p_row["confidence"],
                     "style": {
                         "font_size": round((p_row["bbox"]["y1"] - p_row["bbox"]["y0"]) * 0.8, 2),
