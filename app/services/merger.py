@@ -167,7 +167,7 @@ class OCRMerger:
                 region_assignments[best_r_idx].append(p_row)
                 for idx in p_row["indices"]: assigned_paddle_indices.add(idx)
 
-        # ── Step 4: Internal Alignment ──
+        # ── Step 4: Internal Alignment (v10.0 - Visual Row Assembly) ──
         merged_regions = []
         for r_idx, region in enumerate(valid_regions):
             assigned_rows = sorted(region_assignments[r_idx], key=lambda x: x["bbox"]["y0"])
@@ -177,7 +177,7 @@ class OCRMerger:
                 merged_regions.append(region)
                 continue
 
-            # Splicing logic (Table Row Splitter)
+            # 1. Structural Row Splicing (Table Row Splitter)
             refined_m_lines = []
             for m_line in mineru_lines:
                 raw = m_line["text"]
@@ -194,42 +194,85 @@ class OCRMerger:
                 merged_regions.append(region)
                 continue
 
-            # Sequential character matching within the assigned physical rows
-            m_full_text = " ".join(m["text"] for m in refined_m_lines)
-            p_full_text = " ".join(r["text"] for r in assigned_rows)
-            
-            p_offsets = []
-            curr = 0
-            for r in assigned_rows:
-                start = p_full_text.find(r["text"], curr)
-                if start == -1: start = curr
-                end = start + len(r["text"])
-                p_offsets.append((start, end))
-                curr = end
-
-            matcher = difflib.SequenceMatcher(None, m_full_text, p_full_text, autojunk=False)
-            matching_blocks = matcher.get_matching_blocks()
-            
-            final_lines = []
-            for i, (p_start, p_end) in enumerate(p_offsets):
-                p_row = assigned_rows[i]
-                m_start, m_end = None, None
-                for b in matching_blocks:
-                    o_start = max(b.b, p_start)
-                    o_end = min(b.b + b.size, p_end)
-                    if o_start < o_end:
-                        c_m_start = b.a + (o_start - b.b)
-                        c_m_end = c_m_start + (o_end - o_start)
-                        if m_start is None or c_m_start < m_start: m_start = c_m_start
-                        if m_end is None or c_m_end > m_end: m_end = c_m_end
+            # 2. Word Tokenization (MinerU) with Spatial Anchoring
+            m_words = []
+            for m_line in refined_m_lines:
+                words = m_line["text"].split()
+                if not words: continue
                 
-                text = m_full_text[m_start:m_end].strip() if (m_start is not None and (m_end - m_start) > 2) else p_row["text"]
+                # Estimate word boxes for spatial anchoring
+                lb = m_line["bbox"]
+                w_width = (lb["x1"] - lb["x0"]) / len(words)
+                for j, w_text in enumerate(words):
+                    w_bbox = {
+                        "x0": lb["x0"] + (j * w_width),
+                        "y0": lb["y0"],
+                        "x1": lb["x0"] + ((j + 1) * w_width),
+                        "y1": lb["y1"]
+                    }
+                    m_words.append({"text": w_text, "bbox": w_bbox})
+
+            # 3. Geometric Bucket Assignment (Pouring words into physical rows)
+            row_buckets = [[] for _ in range(len(assigned_rows))]
+            for m_word in m_words:
+                best_p_idx = -1
+                best_ioa = 0.0
+                
+                for p_idx, p_row in enumerate(assigned_rows):
+                    p_bbox = p_row["bbox"]
+                    # Calculate IoA (Intersection over m_word Area)
+                    ix0, iy0 = max(m_word["bbox"]["x0"], p_bbox["x0"]), max(m_word["bbox"]["y0"], p_bbox["y0"])
+                    ix1, iy1 = min(m_word["bbox"]["x1"], p_bbox["x1"]), min(m_word["bbox"]["y1"], p_bbox["y1"])
+                    
+                    inter_w = max(0, ix1 - ix0)
+                    inter_h = max(0, iy1 - iy0)
+                    inter_area = inter_w * inter_h
+                    word_area = (m_word["bbox"]["x1"] - m_word["bbox"]["x0"]) * (m_word["bbox"]["y1"] - m_word["bbox"]["y0"])
+                    
+                    ioa = inter_area / float(word_area) if word_area > 0 else 0
+                    if ioa > best_ioa:
+                        best_ioa = ioa
+                        best_p_idx = p_idx
+                
+                # If a word is 40% inside a Paddle row, assign it
+                if best_p_idx != -1 and best_ioa > 0.4:
+                    row_buckets[best_p_idx].append(m_word)
+                else:
+                    # Vertical Proximity Fallback for small shifts
+                    m_cy = (m_word["bbox"]["y0"] + m_word["bbox"]["y1"]) / 2
+                    closest_p_idx = -1
+                    min_dist = 99999
+                    for p_idx, p_row in enumerate(assigned_rows):
+                        p_cy = (p_row["bbox"]["y0"] + p_row["bbox"]["y1"]) / 2
+                        dist = abs(m_cy - p_cy)
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_p_idx = p_idx
+                    if closest_p_idx != -1 and min_dist < 15:
+                        row_buckets[closest_p_idx].append(m_word)
+
+            # 4. Physical Row Assembly (Ordering and text reconstruction)
+            final_lines = []
+            for i, p_row in enumerate(assigned_rows):
+                bucket = row_buckets[i]
+                if bucket:
+                    # Sort words within row LEFT-TO-RIGHT (fixes sequence desync)
+                    bucket.sort(key=lambda w: w["bbox"]["x0"])
+                    text = " ".join(w["text"] for w in bucket)
+                else:
+                    text = p_row["text"] # Fallback if no words matched
+                
+                if len(text.strip()) < 2: continue
+
                 final_lines.append({
                     "text": text,
                     "bbox": p_row["bbox"],
                     "parent_bbox": region["bbox"],
                     "confidence_score": p_row["confidence"],
-                    "style": {"font_size": round((p_row["bbox"]["y1"] - p_row["bbox"]["y0"]) * 0.8, 2), "is_bold": region["region_type"] in ["header", "title"]}
+                    "style": {
+                        "font_size": round((p_row["bbox"]["y1"] - p_row["bbox"]["y0"]) * 0.8, 2),
+                        "is_bold": region["region_type"] in ["header", "title"]
+                    }
                 })
             
             region["extracted_lines"] = final_lines
