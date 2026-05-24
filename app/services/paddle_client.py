@@ -28,14 +28,16 @@ class PaddleOCRClient:
         Calls the PaddleOCR service to get precise line-level bounding boxes.
         """
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # Increased timeout to 120s for slow ngrok uploads
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     f"{self.base_url}/api/v1/ocr/lines",
                     json={
                         "document_id": document_id,
                         "page_index": page_index,
                         "image_data": image_base64
-                    }
+                    },
+                    headers={"ngrok-skip-browser-warning": "69420"}
                 )
                 response.raise_for_status()
                 return response.json()
