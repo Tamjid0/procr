@@ -5,6 +5,7 @@ os.environ["VLLM_USE_V1"] = "0"
 import base64
 import io
 import time
+import sys
 import logging
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -36,6 +37,20 @@ class OCRRequest(BaseModel):
 async def startup_event():
     # Eagerly load the model
     model_manager.initialize_models()
+    
+    # ── PILLAR C V12.0: Instant READY Signal ──
+    # We use a forced stdout write + flush + fsync to bypass OS buffering.
+    # This ensures the Colab polling script sees the signal INSTANTLY.
+    sys.stdout.write("\n✅ Procr Engine is READY\n")
+    sys.stdout.flush()
+    try:
+        os.fsync(sys.stdout.fileno())
+    except:
+        pass # Handle cases where stdout is not a real file handle
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "procr", "timestamp": time.time()}
 
 @app.get("/diagnostic")
 async def diagnostic():
@@ -56,13 +71,7 @@ async def process_page(request: OCRRequest):
         image = Image.open(io.BytesIO(img_data)).convert("RGB")
         page_width, page_height = image.size
         
-        # --- SAFE PERFORMANCE TEST: Drop visual tokens by 60% ---
-        # For MinerU, we downscale.
-        mineru_image = image.copy()
-        mineru_image.thumbnail((512, 680), Image.Resampling.LANCZOS)
-        mineru_width, mineru_height = mineru_image.size
-        
-        logger.info(f"📄 Image Decoded: {page_width}x{page_height} | Downscaled MinerU Image: {mineru_width}x{mineru_height}")
+        logger.info(f"📄 Image Decoded: {page_width}x{page_height}")
         decode_time = time.perf_counter()
         
         # 2. Run OCR Tasks Concurrently
@@ -71,7 +80,7 @@ async def process_page(request: OCRRequest):
         async def run_mineru():
             try:
                 client = model_manager.get_client()
-                return client.two_step_extract(mineru_image)
+                return client.two_step_extract(image) # Use original image
             except Exception as e:
                 logger.error(f"❌ MinerU extraction failed: {str(e)}")
                 return []
@@ -101,9 +110,7 @@ async def process_page(request: OCRRequest):
         structured_data = MinerUAdapter.transform(
             mineru_output, 
             page_width, 
-            page_height, 
-            mineru_width=mineru_width, 
-            mineru_height=mineru_height
+            page_height
         )
         
         # Merge with PaddleOCR lines

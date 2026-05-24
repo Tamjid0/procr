@@ -132,13 +132,14 @@ class OCRMerger:
 
             # Tokenize block text to find physical anchors
             full_block_text = " ".join(m["text"] for m in mineru_lines)
-            tokens = [t for t in full_block_text.split() if len(t) > 3] # Unique anchors
+            # Use a Set for O(1) word matching to save CPU
+            tokens = set(t.lower() for t in full_block_text.split() if len(t) > 3) 
             
             # Find physical rows that contain these tokens
             potential_row_indices = []
             for i, p_row in enumerate(physical_rows):
-                p_text_lower = p_row["text"].lower()
-                matches = sum(1 for t in tokens if t.lower() in p_text_lower)
+                p_words = set(p_row["text"].lower().split())
+                matches = len(tokens.intersection(p_words))
                 if matches > 0:
                     potential_row_indices.append((i, matches))
             
