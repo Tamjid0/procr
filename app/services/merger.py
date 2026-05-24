@@ -9,10 +9,13 @@ class OCRMerger:
     def _clean_text(text):
         if not text:
             return ""
-        # Remove markdown characters like | - * # [ ] ( ) ` _ +
-        # Specifically target table artifacts for better matching scores
+        # ── PILLAR C V9.0: Production HTML-to-Markdown Simplifier ──
+        # 1. Convert structural table tags to readable Markdown pipes
+        text = re.sub(r'<(?:tr|th|td)[^>]*>', ' | ', text)
+        # 2. Strip all other HTML tags
+        text = re.sub(r'<[^>]*>', ' ', text)
+        # 3. Standardize whitespace and remove legacy artifacts
         cleaned = re.sub(r'[\|`\-*#_\+\[\]\(\)\{\}]', ' ', text)
-        cleaned = re.sub(r'\s*-+\s*\|\s*-+\s*', ' ', cleaned) # Strip table separators
         cleaned = ' '.join(cleaned.split())
         return cleaned.lower()
 
@@ -107,6 +110,25 @@ class OCRMerger:
             if not mineru_lines:
                 merged_regions.append(region)
                 continue
+
+            # ── PILLAR C V9.1: Mega-Block Table Slicer ──
+            # If a block is a giant table, MinerU often outputs it as one line.
+            # we force-split it into rows using structural tags for better citation granularity.
+            refined_mineru_lines = []
+            for m_line in mineru_lines:
+                raw_txt = m_line["text"]
+                if "<tr" in raw_txt or "<td" in raw_txt:
+                    # Structural Split: each table row becomes a separate logical line
+                    rows = re.split(r'</tr>|<tr>', raw_txt)
+                    for r_txt in rows:
+                        clean_r = OCRMerger._clean_text(r_txt)
+                        if len(clean_r) > 2:
+                            refined_mineru_lines.append({"text": clean_r, "bbox": m_line["bbox"]})
+                else:
+                    m_line["text"] = OCRMerger._clean_text(raw_txt)
+                    refined_mineru_lines.append(m_line)
+            
+            mineru_lines = refined_mineru_lines
 
             # Tokenize block text to find physical anchors
             full_block_text = " ".join(m["text"] for m in mineru_lines)
