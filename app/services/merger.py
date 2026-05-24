@@ -121,13 +121,21 @@ class OCRMerger:
                     potential_row_indices.append((i, matches))
             
             # Identify the visual cluster (True Location)
-            # We look for rows that contain our words and are spatially grouped.
+            # We look for a contiguous "Envelope" of rows that contains our words.
             if potential_row_indices:
-                # Prioritize rows with more matches
-                potential_row_indices.sort(key=lambda x: x[1], reverse=True)
-                # Take the top matched rows as the visual anchor
-                best_indices = [idx for idx, count in potential_row_indices[:max(5, len(mineru_lines))]]
-                target_rows = sorted([physical_rows[i] for i in best_indices], key=lambda x: x["bbox"]["y0"])
+                # 1. Find the median visual center of all matched rows (the 'Anchor Point')
+                all_matched_indices = [idx for idx, count in potential_row_indices]
+                avg_y = sum(physical_rows[i]["bbox"]["y0"] for i in all_matched_indices) / len(all_matched_indices)
+                
+                # 2. Find the contiguous range of physical rows closest to this Anchor Point
+                # This ensures we don't pick up rows from the top of the page if the block is at the bottom.
+                start_row_idx = min(all_matched_indices, key=lambda i: abs(physical_rows[i]["bbox"]["y0"] - avg_y))
+                
+                # Select an envelope around the start point (± N rows based on MinerU line count)
+                buffer = 2
+                range_start = max(0, start_row_idx - buffer)
+                range_end = min(len(physical_rows), start_row_idx + len(mineru_lines) + buffer)
+                target_rows = physical_rows[range_start:range_end]
             else:
                 # FALLBACK: Use MinerU's bbox if no text anchors are found (e.g. symbols only)
                 target_rows = [r for r in physical_rows if OCRMerger._is_contained(r["bbox"], block_bbox, threshold=0.4)]
@@ -135,38 +143,50 @@ class OCRMerger:
                     m_cy = (block_bbox["y0"] + block_bbox["y1"]) / 2
                     target_rows = sorted(physical_rows, key=lambda r: abs(((r["bbox"]["y0"] + r["bbox"]["y1"])/2) - m_cy))[:1]
 
-            # ── Step 3: Spatial Word Mapping ──
-            # Map MinerU words to the discovered physical rows
-            m_words = []
-            for m_line in mineru_lines:
-                words = m_line["text"].split()
-                for w in words: m_words.append(w)
+            # ── Step 3: Sequential-Spatial Alignment (v8.0 - Anti-Shattering) ──
+            # We map MinerU text to the physical rows in the 'Envelope' found in Step 2.
+            # This preserves 100% of the text order and prevents repetitive 'Word Theft'.
+            m_full_text = " ".join(m["text"] for m in mineru_lines)
+            p_full_text = " ".join(r["text"] for r in target_rows)
+            
+            # Map target rows to character offsets in p_full_text
+            p_offsets = []
+            curr_offset = 0
+            for r in target_rows:
+                start = p_full_text.find(r["text"], curr_offset)
+                if start == -1: start = curr_offset
+                end = start + len(r["text"])
+                p_offsets.append((start, end))
+                curr_offset = end
 
-            row_buckets = [[] for _ in range(len(target_rows))]
-            # Evenly distribute words to rows based on text similarity
-            # This is resilient to column/row order differences
-            for m_word in m_words:
-                best_row_idx = -1
-                best_score = 0.0
-                for i, p_row in enumerate(target_rows):
-                    if m_word.lower() in p_row["text"].lower():
-                        score = 1.0
-                    else:
-                        score = difflib.SequenceMatcher(None, m_word.lower(), p_row["text"].lower()).ratio()
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_row_idx = i
-                
-                if best_row_idx != -1 and best_score > 0.6:
-                    row_buckets[best_row_idx].append(m_word)
-
-            # ── Step 4: Final Assembly ──
+            # Use character-level sequence matcher ONLY within the verified cluster
+            matcher = difflib.SequenceMatcher(None, m_full_text, p_full_text, autojunk=False)
+            matching_blocks = matcher.get_matching_blocks()
+            
             new_lines = []
-            for i, p_row in enumerate(target_rows):
-                text = " ".join(row_buckets[i]) if row_buckets[i] else p_row["text"]
-                if len(text.strip()) < 2: continue
+            for i, (p_start, p_end) in enumerate(p_offsets):
+                p_row = target_rows[i]
+                m_start, m_end = None, None
                 
+                for b in matching_blocks:
+                    # find intersection between this match and the current paddle row range
+                    overlap_p_start = max(b.b, p_start)
+                    overlap_p_end = min(b.b + b.size, p_end)
+                    if overlap_p_start < overlap_p_end:
+                        offset_in_block = overlap_p_start - b.b
+                        overlap_len = overlap_p_end - overlap_p_start
+                        curr_m_start = b.a + offset_in_block
+                        curr_m_end = curr_m_start + overlap_len
+                        if m_start is None or curr_m_start < m_start: m_start = curr_m_start
+                        if m_end is None or curr_m_end > m_end: m_end = curr_m_end
+                
+                # Extract the high-fidelity MinerU slice for this physical line
+                if m_start is not None and m_end is not None and (m_end - m_start) > 2:
+                    text = m_full_text[m_start:m_end].strip()
+                    if len(text) < 2: text = p_row["text"] # Fallback if slice is junk
+                else:
+                    text = p_row["text"]
+
                 new_lines.append({
                     "text": text,
                     "bbox": p_row["bbox"],
@@ -182,18 +202,28 @@ class OCRMerger:
             region["extracted_lines"] = new_lines
             merged_regions.append(region)
 
-        # Orphan Harvesting
+        # ── Step 4: Orphan Harvesting with Context ──
         for i, p_line in enumerate(paddle_lines):
             if i not in assigned_paddle_indices:
+                p_bbox = p_line["bbox"]
+                # Guard: find logical parent box (nearest neighbor region)
+                if mineru_data["extracted_regions"]:
+                    nearest_region = min(mineru_data["extracted_regions"], 
+                                         key=lambda r: abs(((r["bbox"]["y0"] + r["bbox"]["y1"])/2) - ((p_bbox["y0"] + p_bbox["y1"])/2)))
+                    parent_bbox = nearest_region["bbox"]
+                else:
+                    parent_bbox = p_bbox
+                    
                 merged_regions.append({
                     "region_id": f"reg-orphan-{i}",
                     "region_index": 1000 + i,
                     "region_type": "text",
-                    "bbox": p_line["bbox"],
+                    "bbox": p_bbox,
                     "confidence_score": p_line["confidence"],
                     "extracted_lines": [{
                         "text": p_line["text"],
                         "bbox": p_line["bbox"],
+                        "parent_bbox": parent_bbox,
                         "confidence_score": p_line["confidence"],
                         "style": {"font_size": 12, "is_bold": False}
                     }]
