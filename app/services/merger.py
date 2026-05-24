@@ -54,30 +54,46 @@ class OCRMerger:
     @staticmethod
     def _filter_redundant_regions(regions):
         """
-        Removes overlapping MinerU regions by prioritizing structured content.
-        Priority: table, formula, header > text
+        Removes overlapping MinerU regions by prioritizing structured content and 
+        handling containment (e.g. a table inside a giant layout block).
         """
         if not regions: return []
         
-        # Sort by priority and then by index
+        # Priority: table, formula, header > text > layout
         def get_priority(r_type):
-            if r_type in ["table", "formula", "header", "title"]: return 0
-            return 1
+            r_type = r_type.lower()
+            if r_type in ["table", "formula"]: return 0
+            if r_type in ["header", "title"]: return 1
+            if r_type == "text": return 2
+            return 3
             
+        # We sort so that high priority items are processed first
         sorted_regions = sorted(regions, key=lambda x: (get_priority(x["region_type"]), x["region_index"]))
         keep_indices = set(range(len(sorted_regions)))
         
         for i in range(len(sorted_regions)):
             if i not in keep_indices: continue
-            for j in range(i + 1, len(sorted_regions)):
-                if j not in keep_indices: continue
+            for j in range(len(sorted_regions)):
+                if i == j or j not in keep_indices: continue
                 
+                # Check if region i (higher/equal priority) contains or heavily overlaps region j
+                # OR if region j (lower priority) contains region i.
                 iou = OCRMerger._calculate_iou(sorted_regions[i]["bbox"], sorted_regions[j]["bbox"])
-                # If they overlap significantly (> 70%), discard the lower priority one
+                is_i_in_j = OCRMerger._is_contained(sorted_regions[i]["bbox"], sorted_regions[j]["bbox"], threshold=0.8)
+                is_j_in_i = OCRMerger._is_contained(sorted_regions[j]["bbox"], sorted_regions[i]["bbox"], threshold=0.8)
+
+                # 1. If they overlap significantly (> 70%), discard the lower priority one
                 if iou > 0.7:
-                    # Since we sorted by priority, j is always lower or equal priority to i
-                    keep_indices.remove(j)
-        
+                    # discard j if it has lower or equal priority
+                    if get_priority(sorted_regions[j]["region_type"]) >= get_priority(sorted_regions[i]["region_type"]):
+                        if j > i: # Keep the one that came first if priorities are equal
+                             if j in keep_indices: keep_indices.remove(j)
+                
+                # 2. THE WORD SOUP KILLER: If a structured region (i) is INSIDE a larger region (j), 
+                # and i has better priority, discard the larger one (j).
+                elif is_i_in_j and get_priority(sorted_regions[i]["region_type"]) < get_priority(sorted_regions[j]["region_type"]):
+                    if j in keep_indices: keep_indices.remove(j)
+                    
         return [sorted_regions[i] for i in sorted(list(keep_indices))]
 
     @staticmethod
