@@ -253,9 +253,25 @@ class OCRMerger:
             refined_m_lines = []
             for m_line in mineru_lines:
                 if any(tag in m_line["text"] for tag in ["<tr", "<td"]):
+                    row_texts = []
                     for row_txt in re.split(r'</tr>|<tr>', m_line["text"]):
                         clean = OCRMerger._clean_text(row_txt)
-                        if len(clean) > 2: refined_m_lines.append({"text": clean, "bbox": m_line["bbox"]})
+                        if len(clean) > 2:
+                            row_texts.append(clean)
+                    
+                    if row_texts:
+                        n_rows = len(row_texts)
+                        lb = m_line["bbox"]
+                        h = lb["y1"] - lb["y0"]
+                        row_h = h / n_rows if n_rows > 0 else h
+                        for k, text in enumerate(row_texts):
+                            row_bbox = {
+                                "x0": lb["x0"],
+                                "y0": round(lb["y0"] + k * row_h),
+                                "x1": lb["x1"],
+                                "y1": round(lb["y0"] + (k + 1) * row_h)
+                            }
+                            refined_m_lines.append({"text": text, "bbox": row_bbox})
                 else:
                     m_line["text"] = OCRMerger._clean_text(m_line["text"])
                     refined_m_lines.append(m_line)

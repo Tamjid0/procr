@@ -215,6 +215,68 @@ def test_filter_redundant_regions_rules():
     
     print("✅ OCRMerger._filter_redundant_regions strict rules work perfectly!")
 
+def test_table_row_bbox_partitioning():
+    print("🧪 Testing table row bounding box partitioning...")
+    page_width, page_height = 1000, 1000
+    
+    # Mock MinerU data with a table region
+    mineru_data = {
+        "page_width": page_width,
+        "page_height": page_height,
+        "extracted_regions": [
+            {
+                "region_id": "reg-table",
+                "region_index": 0,
+                "region_type": "table",
+                "bbox": {"x0": 100, "y0": 100, "x1": 500, "y1": 300}, # Table height is 200
+                "confidence_score": 0.99,
+                "extracted_lines": [
+                    {
+                        "text": "<table><tr><td>Row 1 Text</td></tr><tr><td>Row 2 Text</td></tr></table>",
+                        "bbox": {"x0": 100, "y0": 100, "x1": 500, "y1": 300},
+                        "confidence_score": 0.99
+                    }
+                ]
+            }
+        ]
+    }
+    
+    # Mock Paddle data with lines that match those rows horizontally and vertically
+    # Row 1 at Y=100-200
+    # Row 2 at Y=200-300
+    paddle_data = {
+        "page_width": page_width,
+        "page_height": page_height,
+        "lines": [
+            {
+                "text": "Row 1 Text",
+                "bbox": {"x0": 100, "y0": 120, "x1": 300, "y1": 140},
+                "confidence": 0.99
+            },
+            {
+                "text": "Row 2 Text",
+                "bbox": {"x0": 100, "y0": 220, "x1": 300, "y1": 240},
+                "confidence": 0.99
+            }
+        ]
+    }
+    
+    merged_result = OCRMerger.merge(mineru_data, paddle_data)
+    
+    lines = merged_result["extracted_regions"][0]["extracted_lines"]
+    assert len(lines) == 2, f"Expected 2 rows, got {len(lines)}"
+    
+    # Verify that the bboxes are partitioned correctly and map to the corresponding physical rows
+    # Row 1 should map to physical row 1 (y0=120)
+    # Row 2 should map to physical row 2 (y0=220)
+    assert lines[0]["text"] == "row 1 text", f"Expected Row 1 text, got '{lines[0]['text']}'"
+    assert lines[0]["bbox"]["y0"] == 120, f"Expected Row 1 to map to physical row 1, got bbox: {lines[0]['bbox']}"
+    
+    assert lines[1]["text"] == "row 2 text", f"Expected Row 2 text, got '{lines[1]['text']}'"
+    assert lines[1]["bbox"]["y0"] == 220, f"Expected Row 2 to map to physical row 2, got bbox: {lines[1]['bbox']}"
+    
+    print("✅ Table row bounding box partitioning works perfectly!")
+
 if __name__ == "__main__":
     try:
         test_mineru_adapter_scaling()
@@ -222,6 +284,8 @@ if __name__ == "__main__":
         test_ocr_merger_sorting()
         print()
         test_filter_redundant_regions_rules()
+        print()
+        test_table_row_bbox_partitioning()
         print("\n🎉 ALL TESTS PASSED SUCCESSFULLY!")
     except AssertionError as e:
         print(f"\n❌ TEST FAILED: {str(e)}")
