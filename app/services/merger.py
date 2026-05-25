@@ -9,12 +9,17 @@ class OCRMerger:
     def _clean_text(text):
         if not text:
             return ""
-        # ── PILLAR C V9.0: Production HTML-to-Markdown Simplifier ──
-        # 1. Convert structural table tags to readable Markdown pipes
+        # ── PILLAR C V14.0: Production Cleaning & Unescaping ──
+        # 1. Unescape HTML entities (fixes & x27; -> ')
+        text = html.unescape(text)
+        # Manual fix for broken Qwen VL artifacts
+        text = text.replace("& x27;", "'").replace("&amp;", "&")
+        
+        # 2. Convert structural table tags to readable Markdown pipes
         text = re.sub(r'<(?:tr|th|td)[^>]*>', ' | ', text)
-        # 2. Strip all other HTML tags
+        # 3. Strip all other HTML tags
         text = re.sub(r'<[^>]*>', ' ', text)
-        # 3. Standardize whitespace and remove legacy artifacts
+        # 4. Standardize whitespace and remove legacy artifacts
         cleaned = re.sub(r'[\|`\-*#_\+\[\]\(\)\{\}]', ' ', text)
         cleaned = ' '.join(cleaned.split())
         return cleaned.lower()
