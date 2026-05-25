@@ -72,34 +72,99 @@ class OCRMerger:
             if r_type in ["header", "title"]: return 1
             if r_type == "text": return 2
             return 3
+
+        def get_area(box):
+            return max(0, box['x1'] - box['x0']) * max(0, box['y1'] - box['y0'])
+
+        def get_intersection(boxA, boxB):
+            xA = max(boxA['x0'], boxB['x0'])
+            yA = max(boxA['y0'], boxB['y0'])
+            xB = min(boxA['x1'], boxB['x1'])
+            yB = min(boxA['y1'], boxB['y1'])
+            w = max(0, xB - xA)
+            h = max(0, yB - yA)
+            return w * h
+
+        def get_region_text(r):
+            lines = r.get("extracted_lines", [])
+            text = " ".join(line.get("text", "") for line in lines)
+            return OCRMerger._clean_text(text)
             
         # We sort so that high priority items are processed first
         sorted_regions = sorted(regions, key=lambda x: (get_priority(x["region_type"]), x["region_index"]))
         keep_indices = set(range(len(sorted_regions)))
-        
+
+        # --- Rule 3: Horizontal Containment ---
+        # Specifically target "Layout" blocks that act as containers. If a Table is found, wipe all other content in that vertical column.
         for i in range(len(sorted_regions)):
             if i not in keep_indices: continue
-            for j in range(len(sorted_regions)):
-                if i == j or j not in keep_indices: continue
+            r_i = sorted_regions[i]
+            if r_i["region_type"].lower() == "table":
+                box_i = r_i["bbox"]
+                w_i = max(1, box_i['x1'] - box_i['x0'])
+                for j in range(i + 1, len(sorted_regions)):
+                    if j not in keep_indices: continue
+                    r_j = sorted_regions[j]
+                    if r_j["region_type"].lower() == "layout" or get_priority(r_j["region_type"]) == 3:
+                        box_j = r_j["bbox"]
+                        w_j = max(1, box_j['x1'] - box_j['x0'])
+                        x_overlap = max(0, min(box_i['x1'], box_j['x1']) - max(box_i['x0'], box_j['x0']))
+                        if x_overlap / w_i >= 0.3 or x_overlap / w_j >= 0.3:
+                            keep_indices.discard(j)
+
+        # --- Rule 1: Strict Overlap Purge ---
+        # If a low-priority block (Layout/Text, priority >= 2) overlaps a high-priority block (Table/Formula, priority == 0)
+        # by even 30% of either block's area, delete the low-priority one immediately.
+        for i in range(len(sorted_regions)):
+            if i not in keep_indices: continue
+            r_i = sorted_regions[i]
+            p_i = get_priority(r_i["region_type"])
+            if p_i == 0:
+                box_i = r_i["bbox"]
+                area_i = get_area(box_i)
+                if area_i <= 0: continue
+                for j in range(i + 1, len(sorted_regions)):
+                    if j not in keep_indices: continue
+                    r_j = sorted_regions[j]
+                    p_j = get_priority(r_j["region_type"])
+                    if p_j >= 2:
+                        box_j = r_j["bbox"]
+                        area_j = get_area(box_j)
+                        if area_j <= 0: continue
+                        inter = get_intersection(box_i, box_j)
+                        if inter / area_i >= 0.3 or inter / area_j >= 0.3:
+                            keep_indices.discard(j)
+
+        # --- Rule 2: Aggressive Content Hash ---
+        # Lower the text similarity deduplication threshold from 0.9 to 0.7.
+        # If two regions contain the same core data, only keep the first one.
+        for i in range(len(sorted_regions)):
+            if i not in keep_indices: continue
+            text_i = get_region_text(sorted_regions[i])
+            if not text_i or len(text_i) < 5: continue
+            for j in range(i + 1, len(sorted_regions)):
+                if j not in keep_indices: continue
+                text_j = get_region_text(sorted_regions[j])
+                if not text_j or len(text_j) < 5: continue
                 
-                # Check if region i (higher/equal priority) contains or heavily overlaps region j
-                # OR if region j (lower priority) contains region i.
+                sim = difflib.SequenceMatcher(None, text_i, text_j).ratio()
+                if sim >= 0.7:
+                    keep_indices.discard(j)
+
+        # --- Default/Fallback Overlap Check (for remaining regions) ---
+        for i in range(len(sorted_regions)):
+            if i not in keep_indices: continue
+            for j in range(i + 1, len(sorted_regions)):
+                if j not in keep_indices: continue
+                
                 iou = OCRMerger._calculate_iou(sorted_regions[i]["bbox"], sorted_regions[j]["bbox"])
                 is_i_in_j = OCRMerger._is_contained(sorted_regions[i]["bbox"], sorted_regions[j]["bbox"], threshold=0.8)
-                is_j_in_i = OCRMerger._is_contained(sorted_regions[j]["bbox"], sorted_regions[i]["bbox"], threshold=0.8)
 
-                # 1. If they overlap significantly (> 70%), discard the lower priority one
                 if iou > 0.7:
-                    # discard j if it has lower or equal priority
                     if get_priority(sorted_regions[j]["region_type"]) >= get_priority(sorted_regions[i]["region_type"]):
-                        if j > i: # Keep the one that came first if priorities are equal
-                             if j in keep_indices: keep_indices.remove(j)
-                
-                # 2. THE WORD SOUP KILLER: If a structured region (i) is INSIDE a larger region (j), 
-                # and i has better priority, discard the larger one (j).
+                        keep_indices.discard(j)
                 elif is_i_in_j and get_priority(sorted_regions[i]["region_type"]) < get_priority(sorted_regions[j]["region_type"]):
-                    if j in keep_indices: keep_indices.remove(j)
-                    
+                    keep_indices.discard(j)
         return [sorted_regions[i] for i in sorted(list(keep_indices))]
 
     @staticmethod

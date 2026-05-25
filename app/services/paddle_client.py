@@ -12,13 +12,17 @@ class PaddleOCRClient:
         
         # Robustly clean the URL
         if url:
-            url = url.strip().strip('"').strip("'")
-            if not url.startswith("http://") and not url.startswith("https://"):
-                # Default to https for ngrok tunnels, http otherwise
-                if "ngrok" in url or ("localhost" not in url and not url.startswith("127.0.0.1")):
+            url = url.strip().strip('"').strip("'").rstrip('/')
+            
+            # ── PILLAR C V15.0: HTTPS Force (Fixes 405 Redirects) ──
+            # If it's ngrok, it MUST be https or the POST will become a GET during redirect
+            if "ngrok" in url:
+                if url.startswith("http://"):
+                    url = "https://" + url[7:]
+                elif not url.startswith("https://"):
                     url = "https://" + url
-                else:
-                    url = "http://" + url
+            elif not url.startswith("http://") and not url.startswith("https://"):
+                url = "http://" + url
         
         self.base_url = url
         logger.info(f"🔗 PaddleOCR client initialized with base_url: {self.base_url}")

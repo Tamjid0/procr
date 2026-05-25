@@ -139,11 +139,89 @@ def test_ocr_merger_sorting():
     
     print("✅ OCRMerger reading order sorting works perfectly!")
 
+def test_filter_redundant_regions_rules():
+    print("🧪 Testing OCRMerger._filter_redundant_regions strict rules...")
+    
+    # 1. Test Rule 1: Strict Overlap Purge
+    # Table (high priority) at [100, 100, 300, 300] (area 40000)
+    # Text (low priority) at [150, 150, 250, 250] (area 10000), which is completely inside Table, so overlap >= 30%
+    regions_r1 = [
+        {
+            "region_id": "table-1",
+            "region_index": 0,
+            "region_type": "table",
+            "bbox": {"x0": 100, "y0": 100, "x1": 300, "y1": 300},
+            "extracted_lines": []
+        },
+        {
+            "region_id": "text-overlap",
+            "region_index": 1,
+            "region_type": "text",
+            "bbox": {"x0": 150, "y0": 150, "x1": 250, "y1": 250},
+            "extracted_lines": []
+        }
+    ]
+    filtered_r1 = OCRMerger._filter_redundant_regions(regions_r1)
+    # The text region should be purged, leaving only the table
+    assert len(filtered_r1) == 1, f"Rule 1 failed: expected 1 region, got {len(filtered_r1)}"
+    assert filtered_r1[0]["region_id"] == "table-1", f"Rule 1 failed: expected table-1, got {filtered_r1[0]['region_id']}"
+    
+    # 2. Test Rule 2: Aggressive Content Hash
+    # Two text regions with similar content (similarity >= 0.7)
+    regions_r2 = [
+        {
+            "region_id": "text-first",
+            "region_index": 0,
+            "region_type": "text",
+            "bbox": {"x0": 100, "y0": 100, "x1": 200, "y1": 150},
+            "extracted_lines": [{"text": "this is a very similar piece of text content for testing"}]
+        },
+        {
+            "region_id": "text-second",
+            "region_index": 1,
+            "region_type": "text",
+            "bbox": {"x0": 500, "y0": 500, "x1": 600, "y1": 550},
+            "extracted_lines": [{"text": "this is a very similar piece of text content for testing here"}]
+        }
+    ]
+    filtered_r2 = OCRMerger._filter_redundant_regions(regions_r2)
+    # The second one should be removed due to content similarity >= 0.7
+    assert len(filtered_r2) == 1, f"Rule 2 failed: expected 1 region, got {len(filtered_r2)}"
+    assert filtered_r2[0]["region_id"] == "text-first", f"Rule 2 failed: expected text-first, got {filtered_r2[0]['region_id']}"
+    
+    # 3. Test Rule 3: Horizontal Containment
+    # Table at [100, 100, 300, 200] (width 200)
+    # Layout block in same vertical column (shares x coordinates [100, 300]) but different y [500, 600]
+    regions_r3 = [
+        {
+            "region_id": "table-col",
+            "region_index": 0,
+            "region_type": "table",
+            "bbox": {"x0": 100, "y0": 100, "x1": 300, "y1": 200},
+            "extracted_lines": []
+        },
+        {
+            "region_id": "layout-container",
+            "region_index": 1,
+            "region_type": "layout",
+            "bbox": {"x0": 90, "y0": 500, "x1": 310, "y1": 600}, # width 220, overlap is 200 (>= 30% of table width)
+            "extracted_lines": []
+        }
+    ]
+    filtered_r3 = OCRMerger._filter_redundant_regions(regions_r3)
+    # The layout container region should be purged, leaving only the table
+    assert len(filtered_r3) == 1, f"Rule 3 failed: expected 1 region, got {len(filtered_r3)}"
+    assert filtered_r3[0]["region_id"] == "table-col", f"Rule 3 failed: expected table-col, got {filtered_r3[0]['region_id']}"
+    
+    print("✅ OCRMerger._filter_redundant_regions strict rules work perfectly!")
+
 if __name__ == "__main__":
     try:
         test_mineru_adapter_scaling()
         print()
         test_ocr_merger_sorting()
+        print()
+        test_filter_redundant_regions_rules()
         print("\n🎉 ALL TESTS PASSED SUCCESSFULLY!")
     except AssertionError as e:
         print(f"\n❌ TEST FAILED: {str(e)}")
