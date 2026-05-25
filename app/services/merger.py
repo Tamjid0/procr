@@ -1,6 +1,7 @@
 import logging
 import re
 import difflib
+import html
 
 logger = logging.getLogger("procr")
 
