@@ -50,6 +50,17 @@ class ModelManager:
         import torch
 
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
+        # Check if model is pre-downloaded locally (OVH cache)
+        import os
+        local_model = "/workspace/hf_cache/hub/models--opendatalab--MinerU2.5-Pro-2604-1.2B"
+        if os.path.exists(local_model):
+            # Find the snapshot directory
+            snapshots_dir = os.path.join(local_model, "snapshots")
+            if os.path.isdir(snapshots_dir):
+                snapshots = os.listdir(snapshots_dir)
+                if snapshots:
+                    model_path = os.path.join(snapshots_dir, sorted(snapshots)[0])
+                    logger.info(f"📦 Using pre-downloaded model: {model_path}")
         gpu_config = _get_gpu_config()
         logger.info(f"🚀 Initializing Procr v2... Model: {model_path}")
         logger.info(f"⚙️  vLLM config: {gpu_config}")
