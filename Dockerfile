@@ -8,6 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV VLLM_USE_V1=0
+ENV HF_HOME=/app/.cache
+ENV TRANSFORMERS_CACHE=/app/.cache
+ENV TORCH_HOME=/app/.cache
 
 # System deps (libgl1 for Pillow/OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -38,7 +41,9 @@ RUN pip install --no-cache-dir \
     Pillow==10.4.0 pydantic==2.9.2 httpx==0.27.2
 
 # === PRE-DOWNLOAD MODEL WEIGHTS ===
-RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('opendatalab/MinerU2.5-Pro-2604-1.2B')"
+RUN mkdir -p /app/.cache && \
+    python -c "from huggingface_hub import snapshot_download; snapshot_download('opendatalab/MinerU2.5-Pro-2604-1.2B')" && \
+    chmod -R777 /app/.cache
 
 # === COPY APP ===
 COPY app/ ./app/
