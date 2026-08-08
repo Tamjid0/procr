@@ -8,6 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: ghcr.io/${{ github.repository }}:latest
 
 jobs:
   build-and-push:
@@ -42,19 +43,19 @@ jobs:
           push: false
           load: true
           platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: procr:test
 
-      - name: Smoke test (syntax + imports)
+      - name: Smoke test (syntax check)
         run: |
-          docker run --rm --entrypoint python ${{ steps.meta.outputs.tags }} -c "
+          docker run --rm --entrypoint python procr:test -c "
           import ast, sys
           for f in ['app/main.py', 'app/core/model_manager.py', 'app/services/adapter.py']:
               try:
                   ast.parse(open(f).read())
-                  print(f'✅ {f} - syntax OK')
+                  print(f'OK {f}')
               except SyntaxError as e:
-                  print(f'❌ {f} - {e}'); sys.exit(1)
-          print('✅ All files pass syntax check')
+                  print(f'FAIL {f} {e}'); sys.exit(1)
+          print('All files pass syntax check')
           "
 
       - name: Push to GHCR
