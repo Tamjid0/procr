@@ -44,14 +44,16 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
 
-      - name: Smoke test (import check)
+      - name: Smoke test (imports + syntax)
         run: |
           docker run --rm ${{ steps.meta.outputs.tags }} python -c "
-          from app.core.model_manager import _get_gpu_config, ModelManager
+          # Test imports only (no GPU needed)
           from app.services.adapter import MinerUAdapter
-          from app.main import app
-          print('All imports OK')
-          print('FastAPI routes:', [r.path for r in app.routes])
+          from app.main import app, OCRRequest
+          print('✅ All imports OK')
+          routes = [r.path for r in app.routes if hasattr(r, 'path')]
+          print(f'   Routes: {routes}')
+          print(f'   OCRRequest fields: {list(OCRRequest.model_fields.keys())}')
           "
 
       - name: Push to GHCR
