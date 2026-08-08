@@ -1,12 +1,11 @@
 # Procr v2 Requirements (MinerU 2.5 Pro)
-# Optimized for environment-default Torch
 
 # Core
 fastapi==0.115.0
 uvicorn==0.30.6
 python-multipart==0.0.9
 
-# Inference & Vision (Using environment defaults where possible)
+# Inference & Vision
 transformers==4.45.0
 accelerate==0.34.0
 bitsandbytes==0.43.3
@@ -14,7 +13,12 @@ qwen-vl-utils==0.0.8
 
 # MinerU / Magic-PDF
 magic-pdf==1.1.0
-mineru-vl-utils==0.2.6
+mineru-vl-utils[vllm]==0.2.6
+
+# GPU Inference
+vllm>=0.6.0
+numpy<2.0.0
+scipy
 
 # Utilities
 Pillow==10.4.0

@@ -1,0 +1,17 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.env
+*.log
+colab_v2
+info
+docs/
+tests/
+*.md
+.vscode/
+.idea/

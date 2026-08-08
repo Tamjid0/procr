@@ -1,12 +1,35 @@
 import os
-# Force stable V0 engine to prevent T4 initialization crashes (V1 is unstable here)
+# Force stable V0 engine (V1 has issues on consumer GPUs)
 os.environ["VLLM_USE_V1"] = "0"
+# Optimize CPU-bound startup
+os.environ["VLLM_CPU_OFFLOAD_GB"] = "0"
 
 import torch
 import logging
 from mineru_vl_utils import MinerUClient
 
 logger = logging.getLogger("procr")
+
+def _get_gpu_config():
+    """Auto-detect GPU and return optimal vLLM config."""
+    if not torch.cuda.is_available():
+        raise RuntimeError("No CUDA GPU available")
+
+    vram_gb = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+    gpu_name = torch.cuda.get_device_name(0)
+    logger.info(f"🖥️  GPU detected: {gpu_name} ({vram_gb:.0f} GB VRAM)")
+
+    if vram_gb >= 40:
+        # L40S, A100, H100 — generous VRAM
+        return {"gpu_memory_utilization": 0.95, "max_num_seqs": 32, "max_model_len": 8192}
+    elif vram_gb >= 20:
+        # L4 (24GB) — good headroom
+        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 24, "max_model_len": 8192}
+    elif vram_gb >= 14:
+        # T4 (16GB) — tight, conservative settings
+        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 16, "max_model_len": 8192}
+    else:
+        raise RuntimeError(f"GPU VRAM too low: {vram_gb:.0f} GB (need ≥14 GB)")
 
 class ModelManager:
     _instance = None
@@ -27,34 +50,30 @@ class ModelManager:
         import torch
 
         model_path = "opendatalab/MinerU2.5-Pro-2604-1.2B"
-        logger.info(f"🚀 Initializing Procr (Proven Path)... Model: {model_path}")
+        gpu_config = _get_gpu_config()
+        logger.info(f"🚀 Initializing Procr v2... Model: {model_path}")
+        logger.info(f"⚙️  vLLM config: {gpu_config}")
         
         try:
             import vllm
             
-            # 1. Manually initialize the vLLM engine with our high-performance settings
-            # HYPER-TUNING FOR SUB-10S LATENCY (Speed Mode)
-            # We enable CUDA Graphs (enforce_eager=False) to eliminate Python overhead.
-            # NOTE: The first request after startup will have a ~45s 'warmup' penalty.
-            logger.info("🔥 Hyper-tuning vLLM engine for T4 (Speed Mode)...")
             tuned_engine = vllm.LLM(
                 model=model_path,
-                gpu_memory_utilization=0.90, # Extra buffer for CUDA Graphs
-                max_num_seqs=16,
+                gpu_memory_utilization=gpu_config["gpu_memory_utilization"],
+                max_num_seqs=gpu_config["max_num_seqs"],
                 enforce_eager=False,
-                max_model_len=8192,
+                max_model_len=gpu_config["max_model_len"],
                 enable_chunked_prefill=False,
                 trust_remote_code=True
             )
             
-            # 2. Pass the pre-initialized engine to MinerU
             self._client = MinerUClient(
                 backend="vllm-engine",
                 vllm_llm=tuned_engine, 
                 image_analysis=True
             )
             
-            # Keep the warmup to avoid first-request timeout
+            # Warm up VLM kernels
             logger.info("🔥 Warming up VLM kernels...")
             try:
                 from PIL import Image
