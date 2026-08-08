@@ -1,41 +1,39 @@
 # Procr v2 - MinerU 2.5 Pro OCR Inference
-# Install order matches colab_v2 (tested, no resolver conflicts)
+# PyTorch base (matches Colab environment) + vLLM + MinerU
 # Compatible with: OVH AI Deploy, RunPod, any Docker+GPU host
 
-FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV VLLM_USE_V1=0
 
-# System deps
+# System deps (libgl1 for Pillow/OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3-pip \
     libgl1 libglib2.0-0 git \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# === INSTALL DEPS IN EXACT COLAB ORDER (avoids resolver conflicts) ===
+# === INSTALL DEPS IN EXACT COLAB ORDER ===
 
 # Step 1: Magic-PDF + numpy pin
-RUN pip install --no-cache-dir --break-system-packages \
+RUN pip install --no-cache-dir --no-build-isolation \
     magic-pdf==1.1.0 "numpy<2.0.0"
 
-# Step 2: MinerU VLM + vLLM (the GPU inference backbone)
-RUN pip install --no-cache-dir --break-system-packages \
+# Step 2: MinerU VLM + vLLM
+RUN pip install --no-cache-dir --no-build-isolation \
     "mineru-vl-utils[vllm]==0.2.6" \
     qwen-vl-utils==0.0.8 \
     "vllm>=0.6.0"
 
 # Step 3: Transformers + accelerate + bitsandbytes
-RUN pip install --no-cache-dir --break-system-packages \
+RUN pip install --no-cache-dir --no-build-isolation \
     "transformers>=4.45.0" accelerate bitsandbytes scipy
 
 # Step 4: Server stack
-RUN pip install --no-cache-dir --break-system-packages \
+RUN pip install --no-cache-dir \
     fastapi==0.115.0 uvicorn==0.30.6 python-multipart==0.0.9 \
     Pillow==10.4.0 pydantic==2.9.2 httpx==0.27.2
 
@@ -47,7 +45,6 @@ COPY app/ ./app/
 
 EXPOSE 8080
 
-# Health check (OVH AI Deploy uses this)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/diagnostic')" || exit 1
 
