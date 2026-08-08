@@ -15,7 +15,7 @@ def _get_gpu_config():
     if not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU available")
 
-    vram_gb = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
     gpu_name = torch.cuda.get_device_name(0)
     logger.info(f"🖥️  GPU detected: {gpu_name} ({vram_gb:.0f} GB VRAM)")
 
