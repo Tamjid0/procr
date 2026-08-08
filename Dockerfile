@@ -18,9 +18,9 @@ ENV VLLM_CONFIG_ROOT=/workspace/vllm_config
 ENV OUTLINES_CACHE_DIR=/tmp/.outlines
 ENV VLLM_USE_V1=0
 
-# System deps
+# System deps (libgl1 for Pillow/OpenCV, gcc for Triton JIT)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 git \
+    libgl1 libglib2.0-0 git gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # === WORKSPACE SETUP ===
