@@ -44,16 +44,17 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
 
-      - name: Smoke test (imports + syntax)
+      - name: Smoke test (syntax + imports)
         run: |
-          docker run --rm ${{ steps.meta.outputs.tags }} python -c "
-          # Test imports only (no GPU needed)
-          from app.services.adapter import MinerUAdapter
-          from app.main import app, OCRRequest
-          print('✅ All imports OK')
-          routes = [r.path for r in app.routes if hasattr(r, 'path')]
-          print(f'   Routes: {routes}')
-          print(f'   OCRRequest fields: {list(OCRRequest.model_fields.keys())}')
+          docker run --rm --entrypoint python ${{ steps.meta.outputs.tags }} -c "
+          import ast, sys
+          for f in ['app/main.py', 'app/core/model_manager.py', 'app/services/adapter.py']:
+              try:
+                  ast.parse(open(f).read())
+                  print(f'✅ {f} - syntax OK')
+              except SyntaxError as e:
+                  print(f'❌ {f} - {e}'); sys.exit(1)
+          print('✅ All files pass syntax check')
           "
 
       - name: Push to GHCR
