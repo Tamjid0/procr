@@ -1,4 +1,4 @@
-name: Build and Push to GHCR
+name: Build, Test, and Push to GHCR
 
 on:
   push:
@@ -35,7 +35,26 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=
 
-      - name: Build and push
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Smoke test (import check)
+        run: |
+          docker run --rm ${{ steps.meta.outputs.tags }} python -c "
+          from app.core.model_manager import _get_gpu_config, ModelManager
+          from app.services.adapter import MinerUAdapter
+          from app.main import app
+          print('All imports OK')
+          print('FastAPI routes:', [r.path for r in app.routes])
+          "
+
+      - name: Push to GHCR
         uses: docker/build-push-action@v5
         with:
           context: .
