@@ -1,10 +1,12 @@
 import base64
 import io
+import json
 import time
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from PIL import Image
+from typing import Optional
 
 from app.core.model_manager import model_manager
 from app.services.adapter import MinerUAdapter
@@ -14,7 +16,8 @@ logger = logging.getLogger("procr")
 
 app = FastAPI(title="Procr v2 - MinerU 2.5 Pro")
 
-from typing import Optional
+MAX_SIDE = 1280
+MAX_BATCH_SIZE = 64
 
 
 class OCRRequest(BaseModel):
@@ -26,26 +29,9 @@ class OCRRequest(BaseModel):
     processing_flags: Optional[dict] = None
 
 
-class BatchOCRPage(BaseModel):
-    document_id: str
-    page_index: int
-    image_data: str
-    image_width: int
-    image_height: int
-
-
-class BatchOCRRequest(BaseModel):
-    pages: list[BatchOCRPage]
-    processing_flags: Optional[dict] = None
-
-
-MAX_SIDE = 1280
-
-
-def _decode_and_resize(page: BatchOCRPage) -> tuple[Image.Image, int, int]:
-    """Decode base64 image, resize if needed, return (image, orig_w, orig_h)."""
-    img_data = base64.b64decode(page.image_data)
-    image = Image.open(io.BytesIO(img_data)).convert("RGB")
+def _decode_image_bytes(data: bytes) -> tuple[Image.Image, int, int]:
+    """Decode raw image bytes, resize if needed, return (image, orig_w, orig_h)."""
+    image = Image.open(io.BytesIO(data)).convert("RGB")
     orig_w, orig_h = image.size
     if max(orig_w, orig_h) > MAX_SIDE:
         ratio = MAX_SIDE / max(orig_w, orig_h)
@@ -140,44 +126,54 @@ async def process_page(request: OCRRequest):
 
 
 @app.post("/api/v1/ocr/process-batch")
-async def process_batch(request: BatchOCRRequest):
-    """Process multiple pages in a single batch for true GPU parallelism.
+async def process_batch(
+    files: list[UploadFile] = File(...),
+    metadata: str = Form(...),
+):
+    """Multipart binary upload for batch OCR.
 
-    Uses MinerUClient.batch_two_step_extract() which batches layout
-    detection for ALL pages in one vLLM.generate() call, then batches
-    content extraction in a second call — reducing N pages from 2N
-    sequential GPU calls to just 2 batched calls.
+    - ``files``: ordered list of raw image binaries (PNG/JPEG).
+    - ``metadata``: JSON string with keys:
+        - ``document_id``: str
+        - ``pages``: list of ``{"page_index": int, "page_width": int, "page_height": int}``
+
+    Files must be ordered to match the ``pages`` array by index.
     """
     batch_start = time.perf_counter()
-    page_count = len(request.pages)
+    page_count = len(files)
 
     if page_count == 0:
-        raise HTTPException(status_code=400, detail="No pages provided")
+        raise HTTPException(status_code=400, detail="No files provided")
 
-    if page_count > 64:
+    if page_count > MAX_BATCH_SIZE:
         raise HTTPException(
-            status_code=400, detail="Batch size limited to 64 pages"
+            status_code=400, detail=f"Batch size limited to {MAX_BATCH_SIZE} pages"
         )
 
     try:
-        logger.info(f"Batch decoding {page_count} images...")
+        meta = json.loads(metadata)
+        page_metas: list[dict] = meta.get("pages", [])
+        document_id: str = meta.get("document_id", "")
+
+        if len(page_metas) != page_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Mismatch: {page_count} files but {len(page_metas)} metadata entries",
+            )
+
+        logger.info(f"Batch decoding {page_count} images (multipart)...")
         decode_start = time.perf_counter()
 
         images = []
-        page_metas = []
-        for page in request.pages:
-            image, orig_w, orig_h = _decode_and_resize(page)
+        for i, (f, pm) in enumerate(zip(files, page_metas)):
+            raw = await f.read()
+            image, orig_w, orig_h = _decode_image_bytes(raw)
             images.append(image)
-            page_metas.append({
-                "page_index": page.page_index,
-                "width": orig_w,
-                "height": orig_h,
-            })
+            pm["width"] = orig_w
+            pm["height"] = orig_h
 
         decode_time = time.perf_counter() - decode_start
-        logger.info(
-            f"Decoded {page_count} images in {decode_time:.2f}s"
-        )
+        logger.info(f"Decoded {page_count} images in {decode_time:.2f}s")
 
         logger.info(f"Running batched VLM Inference on {page_count} pages...")
         inference_start = time.perf_counter()
@@ -195,9 +191,9 @@ async def process_batch(request: BatchOCRRequest):
         adapt_start = time.perf_counter()
 
         pages = []
-        for result, meta in zip(batch_results, page_metas):
+        for result, pm in zip(batch_results, page_metas):
             pages.append(
-                _format_single_result(result, meta["page_index"], meta["width"], meta["height"])
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"])
             )
 
         adapt_time = time.perf_counter() - adapt_start
@@ -214,6 +210,8 @@ async def process_batch(request: BatchOCRRequest):
 
         return {"pages": pages}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Batch processing error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
