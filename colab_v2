@@ -94,7 +94,7 @@ else:
 
 # === CELL 3: QUICK BENCHMARK (no server needed) ===
 import os, time, base64, io
-os.environ["VLLM_USE_V1"] = "1"
+os.environ["VLLM_USE_V1"] = "0"
 os.environ["VLLM_CPU_OFFLOAD_GB"] = "0"
 
 from PIL import Image
@@ -108,7 +108,6 @@ llm = vllm.LLM(
     gpu_memory_utilization=0.92,
     max_num_seqs=48,
     max_model_len=2048,
-    enforce_eager=True,
     enable_chunked_prefill=True,
     trust_remote_code=True,
     dtype="bfloat16",
