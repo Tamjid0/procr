@@ -19,12 +19,12 @@ def _get_gpu_config():
     logger.info(f"🖥️  GPU detected: {gpu_name} ({vram_gb:.0f} GB VRAM)")
 
     if vram_gb >= 40:
-        return {"gpu_memory_utilization": 0.95, "max_num_seqs": 64, "max_model_len": 2048}
+        return {"gpu_memory_utilization": 0.95, "max_num_seqs": 64, "max_model_len": 4096}
     elif vram_gb >= 20:
-        # L4 (24GB) — aggressive settings for sub-1s OCR
-        return {"gpu_memory_utilization": 0.92, "max_num_seqs": 48, "max_model_len": 2048}
+        # L4 (24GB) — max_model_len=4096 to prevent truncation on complex pages
+        return {"gpu_memory_utilization": 0.92, "max_num_seqs": 48, "max_model_len": 4096}
     elif vram_gb >= 14:
-        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 24, "max_model_len": 2048}
+        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 24, "max_model_len": 4096}
     else:
         raise RuntimeError(f"GPU VRAM too low: {vram_gb:.0f} GB (need ≥14 GB)")
 
