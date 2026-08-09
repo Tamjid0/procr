@@ -3,8 +3,8 @@ import os, shutil
 %cd /content
 if os.path.exists('procr'): shutil.rmtree('procr')
 
-# Clone the repository
-!git clone https://github.com/Tamjid0/procr.git
+# Clone the test branch with perf optimizations
+!git clone -b test/perf-vllm https://github.com/Tamjid0/procr.git
 %cd /content/procr
 
 # Install MinerU 2.5 Pro and VLM Utils sequentially to avoid resolver conflicts
@@ -90,3 +90,41 @@ if public_url != "FAILED":
     print("👉 Use this for Phase 2 testing!")
 else:
     print("🛑 Script stopped because Ngrok failed.")
+
+
+# === CELL 3: QUICK BENCHMARK (no server needed) ===
+import os, time, base64, io
+os.environ["VLLM_USE_V1"] = "0"
+os.environ["VLLM_CPU_OFFLOAD_GB"] = "0"
+
+from PIL import Image
+import vllm
+from mineru_vl_utils import MinerUClient
+
+print("⏳ Loading model...")
+t0 = time.time()
+llm = vllm.LLM(
+    model="opendatalab/MinerU2.5-Pro-2604-1.2B",
+    gpu_memory_utilization=0.92,
+    max_num_seqs=48,
+    max_model_len=2048,
+    enable_chunked_prefill=True,
+    trust_remote_code=True,
+    dtype="bfloat16",
+)
+client = MinerUClient(backend="vllm-engine", vllm_llm=llm, image_analysis=True)
+print(f"✅ Model loaded in {time.time()-t0:.1f}s")
+
+# Test with a synthetic image
+img = Image.new("RGB", (1240, 1755), "white")
+print("\n⏱️  Benchmarking 5 runs...")
+times = []
+for i in range(5):
+    t = time.time()
+    client.two_step_extract(img)
+    elapsed = time.time() - t
+    times.append(elapsed)
+    print(f"  Run {i+1}: {elapsed:.3f}s")
+
+avg = sum(times) / len(times)
+print(f"\n📊 Avg: {avg:.3f}s | Min: {min(times):.3f}s | Max: {max(times):.3f}s")
