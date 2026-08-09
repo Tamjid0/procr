@@ -49,6 +49,15 @@ async def process_page(request: OCRRequest):
         image = Image.open(io.BytesIO(img_data)).convert("RGB")
         page_width, page_height = image.size
         logger.info(f"📄 Image Decoded: {page_width}x{page_height}")
+
+        # Downscale to max 1280px on longest side — VLM doesn't need full res for OCR
+        MAX_SIDE = 1280
+        if max(page_width, page_height) > MAX_SIDE:
+            ratio = MAX_SIDE / max(page_width, page_height)
+            new_w, new_h = int(page_width * ratio), int(page_height * ratio)
+            image = image.resize((new_w, new_h), Image.LANCZOS)
+            logger.info(f"🔀 Resized to {new_w}x{new_h} (ratio={ratio:.2f})")
+
         decode_time = time.perf_counter()
         
         # 2. VLM Inference

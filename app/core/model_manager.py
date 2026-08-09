@@ -1,6 +1,6 @@
 import os
-# Force stable V0 engine (V1 has issues on consumer GPUs)
-os.environ["VLLM_USE_V1"] = "0"
+# V1 engine: faster scheduling, better throughput for batched inference
+os.environ["VLLM_USE_V1"] = "1"
 # Optimize CPU-bound startup
 os.environ["VLLM_CPU_OFFLOAD_GB"] = "0"
 
@@ -20,14 +20,12 @@ def _get_gpu_config():
     logger.info(f"🖥️  GPU detected: {gpu_name} ({vram_gb:.0f} GB VRAM)")
 
     if vram_gb >= 40:
-        # L40S, A100, H100 — generous VRAM
-        return {"gpu_memory_utilization": 0.95, "max_num_seqs": 32, "max_model_len": 8192}
+        return {"gpu_memory_utilization": 0.95, "max_num_seqs": 64, "max_model_len": 2048}
     elif vram_gb >= 20:
-        # L4 (24GB) — good headroom
-        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 24, "max_model_len": 8192}
+        # L4 (24GB) — aggressive settings for sub-1s OCR
+        return {"gpu_memory_utilization": 0.92, "max_num_seqs": 48, "max_model_len": 2048}
     elif vram_gb >= 14:
-        # T4 (16GB) — tight, conservative settings
-        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 16, "max_model_len": 8192}
+        return {"gpu_memory_utilization": 0.90, "max_num_seqs": 24, "max_model_len": 2048}
     else:
         raise RuntimeError(f"GPU VRAM too low: {vram_gb:.0f} GB (need ≥14 GB)")
 
@@ -72,10 +70,12 @@ class ModelManager:
                 model=model_path,
                 gpu_memory_utilization=gpu_config["gpu_memory_utilization"],
                 max_num_seqs=gpu_config["max_num_seqs"],
-                enforce_eager=False,
+                enforce_eager=True,
                 max_model_len=gpu_config["max_model_len"],
-                enable_chunked_prefill=False,
-                trust_remote_code=True
+                enable_chunked_prefill=True,
+                trust_remote_code=True,
+                dtype="bfloat16",
+                prefix_caching=True
             )
             
             self._client = MinerUClient(
