@@ -74,8 +74,7 @@ class ModelManager:
                 max_model_len=gpu_config["max_model_len"],
                 enable_chunked_prefill=True,
                 trust_remote_code=True,
-                dtype="bfloat16",
-                prefix_caching=True
+                dtype="bfloat16"
             )
             
             self._client = MinerUClient(
