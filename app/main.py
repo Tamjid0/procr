@@ -5,7 +5,7 @@
 # patch has no effect because vLLM has already captured the
 # original tqdm reference.
 # ═══════════════════════════════════════════════════════════
-from app.core.tqdm_patch import set_job_id, reset_job_id  # noqa: E402
+from app.core.tqdm_patch import set_job_id, clear_job_id  # noqa: E402
 
 import asyncio
 import base64
@@ -241,7 +241,6 @@ async def _run_batch_inference(
     page_count: int,
     page_metas: list[dict],
     images: list,
-    token,
 ):
     """Run batch inference in background and store result."""
     from app.core.progress_store import progress_store
@@ -281,7 +280,7 @@ async def _run_batch_inference(
         logger.error(f"[async-batch] Batch failed (job: {job_id}): {str(e)}")
         progress_store.fail(job_id, str(e))
     finally:
-        reset_job_id(token)
+        clear_job_id()
 
 
 @app.post("/api/v1/ocr/process-batch-async")
@@ -335,10 +334,10 @@ async def process_batch_async(
         progress_store.init_job(job_id, document_id, page_count)
         progress_store.set_phase(job_id, "infer_layout", phase_total=page_count)
 
-        token = set_job_id(job_id)
+        set_job_id(job_id)
 
         asyncio.create_task(
-            _run_batch_inference(job_id, batch_start, decode_time, page_count, page_metas, images, token)
+            _run_batch_inference(job_id, batch_start, decode_time, page_count, page_metas, images)
         )
 
         return {"job_id": job_id, "document_id": document_id, "total_pages": page_count}
