@@ -1,9 +1,21 @@
+# ═══════════════════════════════════════════════════════════
+# CRITICAL: tqdm_patch MUST be imported BEFORE vllm/mineru_vl_utils
+# The patch monkey-patches tqdm.tqdm.update() so vLLM's progress
+# bars write to progress_store. If vllm is imported first, the
+# patch has no effect because vLLM has already captured the
+# original tqdm reference.
+# ═══════════════════════════════════════════════════════════
+from app.core.tqdm_patch import set_job_id, reset_job_id  # noqa: E402
+
+import asyncio
 import base64
 import io
 import json
 import time
 import logging
+import uuid
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from PIL import Image
 from typing import Optional
@@ -215,6 +227,202 @@ async def process_batch(
     except Exception as e:
         logger.error(f"Batch processing error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Event string."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+async def _run_batch_inference(
+    job_id: str,
+    batch_start: float,
+    decode_time: float,
+    page_count: int,
+    page_metas: list[dict],
+    images: list,
+    token,
+):
+    """Run batch inference in background and store result."""
+    from app.core.progress_store import progress_store
+
+    try:
+        logger.info(f"[async-batch] Running batched VLM Inference on {page_count} pages (job: {job_id})...")
+        inference_start = time.perf_counter()
+
+        client = model_manager.get_client()
+        batch_results = client.batch_two_step_extract(images)
+
+        inference_time = time.perf_counter() - inference_start
+        logger.info(f"[async-batch] Batch inference complete in {inference_time:.2f}s (job: {job_id})")
+
+        logger.info(f"[async-batch] Adapting batch results (job: {job_id})...")
+        adapt_start = time.perf_counter()
+
+        pages = []
+        for result, pm in zip(batch_results, page_metas):
+            pages.append(
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"])
+            )
+
+        adapt_time = time.perf_counter() - adapt_start
+        total_time = time.perf_counter() - batch_start
+        logger.info(
+            f"[async-batch] BATCH PERFORMANCE: Total {total_time:.2f}s | "
+            f"Decode {decode_time:.2f}s | Inference {inference_time:.2f}s | "
+            f"Adapt {adapt_time:.2f}s | Pages {page_count} | "
+            f"Effective {total_time / page_count:.2f}s/page (job: {job_id})"
+        )
+
+        result = {"pages": pages}
+        progress_store.complete(job_id, result)
+
+    except Exception as e:
+        logger.error(f"[async-batch] Batch failed (job: {job_id}): {str(e)}")
+        progress_store.fail(job_id, str(e))
+    finally:
+        reset_job_id(token)
+
+
+@app.post("/api/v1/ocr/process-batch-async")
+async def process_batch_async(
+    files: list[UploadFile] = File(...),
+    metadata: str = Form(...),
+):
+    """Async batch OCR - returns job_id immediately, streams progress via SSE.
+
+    The multipart upload + image decoding happens inline (fast, <2s).
+    The heavy inference runs in a background task.
+
+    Client then opens GET /api/v1/ocr/batch-stream/{job_id} for progress.
+    """
+    from app.core.progress_store import progress_store
+
+    batch_start = time.perf_counter()
+    page_count = len(files)
+
+    if page_count == 0:
+        raise HTTPException(status_code=400, detail="No files provided")
+    if page_count > MAX_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail=f"Batch size limited to {MAX_BATCH_SIZE} pages")
+
+    try:
+        meta = json.loads(metadata)
+        page_metas: list[dict] = meta.get("pages", [])
+        document_id: str = meta.get("document_id", "")
+
+        if len(page_metas) != page_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Mismatch: {page_count} files but {len(page_metas)} metadata entries",
+            )
+
+        logger.info(f"[async-batch] Decoding {page_count} images (multipart)...")
+        decode_start = time.perf_counter()
+
+        images = []
+        for i, (f, pm) in enumerate(zip(files, page_metas)):
+            raw = await f.read()
+            image, orig_w, orig_h = _decode_image_bytes(raw)
+            images.append(image)
+            pm["width"] = orig_w
+            pm["height"] = orig_h
+
+        decode_time = time.perf_counter() - decode_start
+        logger.info(f"[async-batch] Decoded {page_count} images in {decode_time:.2f}s")
+
+        job_id = uuid.uuid4().hex
+        progress_store.init_job(job_id, document_id, page_count)
+        progress_store.set_phase(job_id, "infer_layout", phase_total=page_count)
+
+        token = set_job_id(job_id)
+
+        asyncio.create_task(
+            _run_batch_inference(job_id, batch_start, decode_time, page_count, page_metas, images, token)
+        )
+
+        return {"job_id": job_id, "document_id": document_id, "total_pages": page_count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[async-batch] Setup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ocr/batch-stream/{job_id}")
+async def batch_stream(job_id: str):
+    """SSE endpoint - streams progress events for a batch OCR job.
+
+    Events:
+        progress: {phase, phase_completed, phase_total, total_pages, percent}
+        done:     {result: {pages: [...]}}
+        error:    {error: str}
+    """
+    from app.core.progress_store import progress_store
+
+    async def event_stream():
+        job = progress_store.get(job_id)
+        if not job:
+            yield _sse_event("error", {"error": f"Job {job_id} not found"})
+            return
+
+        last_completed = -1
+        last_phase = ""
+
+        while True:
+            job = progress_store.get(job_id)
+            if not job:
+                yield _sse_event("error", {"error": f"Job {job_id} disappeared"})
+                return
+
+            current_phase = job.phase
+            current_completed = job.phase_completed
+
+            if current_phase != last_phase or current_completed != last_completed:
+                last_phase = current_phase
+                last_completed = current_completed
+
+                if current_phase == "decoding":
+                    percent = 0
+                elif current_phase == "infer_layout":
+                    percent = int((job.phase_completed / max(job.phase_total, 1)) * 65) if job.phase_total else 0
+                elif current_phase == "infer_text":
+                    text_progress = job.phase_completed / max(job.phase_total, 1) if job.phase_total else 0
+                    percent = int(65 + text_progress * 35)
+                elif current_phase == "done":
+                    percent = 100
+                elif current_phase == "failed":
+                    percent = 0
+                else:
+                    percent = 0
+
+                yield _sse_event("progress", {
+                    "phase": current_phase,
+                    "phase_completed": job.phase_completed,
+                    "phase_total": job.phase_total,
+                    "total_pages": job.total_pages,
+                    "percent": percent,
+                })
+
+            if job.phase == "done" and job.result:
+                yield _sse_event("done", {"result": job.result})
+                return
+            if job.phase == "failed":
+                yield _sse_event("error", {"error": job.error or "Unknown error"})
+                return
+
+            await asyncio.sleep(0.2)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":
