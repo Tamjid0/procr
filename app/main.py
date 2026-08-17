@@ -203,9 +203,9 @@ async def process_batch(
         adapt_start = time.perf_counter()
 
         pages = []
-        for result, pm in zip(batch_results, page_metas):
+        for result, pm, page_image in zip(batch_results, page_metas, images):
             pages.append(
-                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], image)
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], page_image)
             )
 
         adapt_time = time.perf_counter() - adapt_start
@@ -259,9 +259,9 @@ async def _run_batch_inference(
         adapt_start = time.perf_counter()
 
         pages = []
-        for result, pm in zip(batch_results, page_metas):
+        for result, pm, page_image in zip(batch_results, page_metas, images):
             pages.append(
-                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], image)
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], page_image)
             )
 
         adapt_time = time.perf_counter() - adapt_start
