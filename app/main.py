@@ -59,10 +59,10 @@ def _get_content(region) -> str:
 
 
 def _format_single_result(
-    mineru_output, page_index: int, page_width: int, page_height: int
+    mineru_output, page_index: int, page_width: int, page_height: int, page_image: Optional[Image.Image] = None
 ) -> dict:
     """Transform MinerU output into the standard OCR response format."""
-    structured_data = MinerUAdapter.transform(mineru_output, page_width, page_height)
+    structured_data = MinerUAdapter.transform(mineru_output, page_width, page_height, page_image)
     consolidated_text = "\n".join(
         _get_content(r) for r in mineru_output if r is not None
     )
@@ -119,7 +119,7 @@ async def process_page(request: OCRRequest):
 
         logger.info("Processing results...")
         result = _format_single_result(
-            mineru_output, request.page_index, page_width, page_height
+            mineru_output, request.page_index, page_width, page_height, image
         )
         mapping_time = time.perf_counter()
 
@@ -205,7 +205,7 @@ async def process_batch(
         pages = []
         for result, pm in zip(batch_results, page_metas):
             pages.append(
-                _format_single_result(result, pm["page_index"], pm["width"], pm["height"])
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], image)
             )
 
         adapt_time = time.perf_counter() - adapt_start
@@ -261,7 +261,7 @@ async def _run_batch_inference(
         pages = []
         for result, pm in zip(batch_results, page_metas):
             pages.append(
-                _format_single_result(result, pm["page_index"], pm["width"], pm["height"])
+                _format_single_result(result, pm["page_index"], pm["width"], pm["height"], image)
             )
 
         adapt_time = time.perf_counter() - adapt_start
