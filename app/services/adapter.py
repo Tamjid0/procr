@@ -5,9 +5,9 @@ from PIL import Image
 
 logger = logging.getLogger("procr")
 
-MAX_INK_GAP_PIXELS = 3
-MIN_INK_RATIO = 0.005
-LINE_INK_RATIO = 0.05
+MAX_INK_GAP_PIXELS = 5
+MIN_INK_RATIO = 0.08
+LINE_INK_RATIO = 0.15
 
 
 def _runs(values: list[bool], max_gap: int = 0) -> list[tuple[int, int]]:
@@ -55,7 +55,10 @@ def _line_bboxes_from_pixels(
 
     sorted_pixels = sorted(pixels)
     background = sorted_pixels[min(len(sorted_pixels) - 1, int(len(sorted_pixels) * 0.8))]
-    threshold = max(80, min(220, background - 35))
+    # The page image may have gray paper texture. Keep only dark text ink;
+    # using the background minus a large margin prevents texture from making
+    # every row appear active.
+    threshold = max(70, min(150, background - 100))
     width, height = crop.size
     dark = [pixel < threshold for pixel in pixels]
     row_counts = [sum(dark[row * width:(row + 1) * width]) for row in range(height)]
@@ -73,7 +76,7 @@ def _line_bboxes_from_pixels(
             sum(dark[row * width + column] for row in range(run_top, run_bottom))
             for column in range(width)
         ]
-        column_threshold = max(1, round(run_height * LINE_INK_RATIO))
+        column_threshold = max(2, round(run_height * LINE_INK_RATIO))
         column_runs = _runs([count >= column_threshold for count in column_counts], 1)
         if not column_runs:
             continue
