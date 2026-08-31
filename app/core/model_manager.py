@@ -3,14 +3,16 @@ import os
 os.environ["VLLM_USE_V1"] = "0"
 os.environ["VLLM_CPU_OFFLOAD_GB"] = "0"
 
-import torch
 import logging
-from mineru_vl_utils import MinerUClient
 
 logger = logging.getLogger("procr")
 
+# OCR_MODE controls which engine is loaded. 'mineru' = GPU MinerU (scale), 'vlm' = serverless CF+Gemini (credit burn).
+OCR_MODE = os.getenv("OCR_MODE", "mineru").lower()
+
 def _get_gpu_config():
     """Auto-detect GPU and return optimal vLLM config."""
+    import torch
     if not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU available")
 
@@ -39,10 +41,24 @@ class ModelManager:
         return cls._instance
 
     def initialize_models(self):
-        """Eagerly load the MinerU 2.5 Pro model into VRAM."""
+        """Eagerly load OCR engine based on OCR_MODE."""
         if self._is_ready:
             return
 
+        # ── VLM mode: no GPU, no MinerU load ─────────────────────────
+        if OCR_MODE == "vlm":
+            logger.info("🚀 OCR_MODE=vlm — initializing serverless VLM (CF Qwen + Gemini failover)")
+            try:
+                from app.services.vlm_provider import VlmClient
+                self._client = VlmClient()
+                self._is_ready = True
+                logger.info("🌟 Procr Model Manager READY (VLM mode, no GPU)")
+                return
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize VLM client: {str(e)}")
+                raise e
+
+        # ── MinerU mode: GPU path (original) ──────────────────────────
         from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
         import torch
 
@@ -61,10 +77,11 @@ class ModelManager:
         gpu_config = _get_gpu_config()
         logger.info(f"🚀 Initializing Procr v2... Model: {model_path}")
         logger.info(f"⚙️  vLLM config: {gpu_config}")
-        
+
         try:
             import vllm
-            
+            from mineru_vl_utils import MinerUClient
+
             tuned_engine = vllm.LLM(
                 model=model_path,
                 gpu_memory_utilization=gpu_config["gpu_memory_utilization"],
@@ -74,13 +91,13 @@ class ModelManager:
                 trust_remote_code=True,
                 dtype="bfloat16"
             )
-            
+
             self._client = MinerUClient(
                 backend="vllm-engine",
-                vllm_llm=tuned_engine, 
+                vllm_llm=tuned_engine,
                 image_analysis=True
             )
-            
+
             # Warm up VLM kernels
             logger.info("🔥 Warming up VLM kernels...")
             try:
@@ -89,24 +106,35 @@ class ModelManager:
                 self._client.two_step_extract(dummy_img)
             except Exception as e:
                 logger.warning(f"Warmup skipped: {e}")
-            
+
             self._is_ready = True
-            logger.info("🌟 Procr Model Manager is READY")
-            
+            logger.info("🌟 Procr Model Manager is READY (MinerU mode)")
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize MinerU model: {str(e)}")
             raise e
 
-    def get_client(self) -> MinerUClient:
+    def get_client(self):  # type: ignore[no-untyped-def]
         if not self._is_ready:
             self.initialize_models()
         return self._client
 
     def get_status(self):
+        # Import torch lazily — not available in VLM CPU mode
+        try:
+            import torch
+            has_cuda = torch.cuda.is_available()
+            vram = f"{torch.cuda.memory_allocated() / 1024**2:.2f} MB" if has_cuda else "N/A"
+            device = "cuda" if has_cuda else "cpu"
+        except ImportError:
+            has_cuda = False
+            vram = "N/A (VLM mode)"
+            device = "cpu"
         return {
             "ready": self._is_ready,
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "vram_allocated": f"{torch.cuda.memory_allocated() / 1024**2:.2f} MB" if torch.cuda.is_available() else "N/A"
+            "mode": OCR_MODE,
+            "device": device,
+            "vram_allocated": vram
         }
 
 model_manager = ModelManager()
