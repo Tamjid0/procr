@@ -454,7 +454,7 @@ async def helper_extract_lines(
             page_index = pm.get("page_index", 0)
 
             # Process VLM blocks: each has {type, bbox[x0,y0,x1,y1], content, confidence}
-            # bbox is already scaled to pixel coords by Node (blocksToRegions)
+            # bbox may be [0-1000] normalized or already pixel-scaled
             extracted_regions = []
             for idx, block in enumerate(blocks):
                 btype = block.get("type", "text")
@@ -465,8 +465,16 @@ async def helper_extract_lines(
                 if not content:
                     continue
 
-                # bbox is already pixel-scaled from Node (blocksToRegions -> scaleBbox)
-                x0, y0, x1, y1 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                # Scale [0-1000] normalized coords to pixel coordinates
+                bx0, by0, bx1, by1 = bbox
+                is_normalized = all(0 <= v <= 1000 for v in bbox) and any(v > 1 for v in bbox)
+                if is_normalized:
+                    x0 = round((bx0 / 1000) * orig_w)
+                    y0 = round((by0 / 1000) * orig_h)
+                    x1 = round((bx1 / 1000) * orig_w)
+                    y1 = round((by1 / 1000) * orig_h)
+                else:
+                    x0, y0, x1, y1 = int(bx0), int(by0), int(bx1), int(by1)
 
                 # Run PIL line detection on the block area
                 line_bboxes = _line_bboxes_from_pixels(image, (x0, y0, x1, y1), orig_w, orig_h)
