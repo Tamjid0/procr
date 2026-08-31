@@ -431,10 +431,12 @@ async def helper_extract_lines(
 ):
     """Line-helper for Node VLM path: image+blocks -> line-level extracted_regions.
 
-    Node does AI (CF/Gemini) and sends area blocks [0-1000]; procr does
-    PIL _line_bboxes_from_pixels + _wrap_text_to_lines via MinerUAdapter.
+    Node does AI (CF/Gemini) and sends area blocks [0-1000] with scaled pixel bbox;
+    procr does PIL _line_bboxes_from_pixels + _wrap_text_to_lines.
     This keeps citations pixel-level without procr calling AI.
     """
+    from app.services.adapter import _line_bboxes_from_pixels, _wrap_text_to_lines, _runs, MAX_INK_GAP_PIXELS, MIN_INK_RATIO, LINE_INK_RATIO
+
     try:
         meta = json.loads(metadata)
         pages_meta: list[dict] = meta.get("pages", [])
@@ -450,11 +452,69 @@ async def helper_extract_lines(
             image, orig_w, orig_h = _decode_image_bytes(raw)
             blocks = pm.get("blocks", [])
             page_index = pm.get("page_index", 0)
-            # Blocks are already MinerU-shaped with [0-1000] bboxes; adapter scales to px
-            result = _format_single_result(blocks, orig_w, orig_h, image)
-            # Override page_index to match caller's index (adapter uses passed page_index)
-            result["page_index"] = page_index
-            pages.append(result)
+
+            # Process VLM blocks: each has {type, bbox[x0,y0,x1,y1], content, confidence}
+            # bbox is already scaled to pixel coords by Node (blocksToRegions)
+            extracted_regions = []
+            for idx, block in enumerate(blocks):
+                btype = block.get("type", "text")
+                bbox = block.get("bbox", [0, 0, 0, 0])
+                content = block.get("content", "").strip()
+                confidence = block.get("confidence", 0.95)
+
+                if not content:
+                    continue
+
+                # bbox is already pixel-scaled from Node (blocksToRegions -> scaleBbox)
+                x0, y0, x1, y1 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+
+                # Run PIL line detection on the block area
+                line_bboxes = _line_bboxes_from_pixels(image, (x0, y0, x1, y1), orig_w, orig_h)
+
+                if line_bboxes:
+                    lines = _wrap_text_to_lines(content, line_bboxes)
+                    geometry_source = "pixel_projection"
+                    geometries = line_bboxes
+                else:
+                    lines = [content]
+                    geometry_source = "block"
+                    geometries = [{"x0": x0, "y0": y0, "x1": x1, "y1": y1}]
+
+                extracted_lines = []
+                for line_text, line_bbox in zip(lines, geometries):
+                    extracted_lines.append({
+                        "text": line_text,
+                        "bbox": line_bbox,
+                        "confidence_score": confidence,
+                        "geometry_source": geometry_source,
+                        "style": {
+                            "font_size": round(max(1, line_bbox["y1"] - line_bbox["y0"]) * 0.8, 2),
+                            "is_bold": btype in ["header", "title"]
+                        }
+                    })
+
+                extracted_regions.append({
+                    "region_index": idx,
+                    "region_type": btype,
+                    "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+                    "confidence_score": confidence,
+                    "extracted_lines": extracted_lines,
+                })
+
+            consolidated_text = "\n\n".join(
+                "\n".join(l["text"] for l in r["extracted_lines"])
+                for r in extracted_regions
+            )
+
+            pages.append({
+                "page_index": page_index,
+                "page_width": orig_w,
+                "page_height": orig_h,
+                "reading_order_hints": [r["region_index"] for r in extracted_regions],
+                "extracted_regions": extracted_regions,
+                "text": consolidated_text,
+                "confidence": 0.95,
+            })
 
         return {"pages": pages}
 
