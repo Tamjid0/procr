@@ -1,0 +1,17 @@
+services:
+  procr-vlm:
+    build:
+      context: .
+      dockerfile: Dockerfile.vlm
+    container_name: procr-vlm
+    ports:
+      - "8080:8080"
+    environment:
+      - OCR_MODE=vlm
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/diagnostic"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
