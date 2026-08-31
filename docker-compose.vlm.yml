@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile.vlm
     container_name: procr-vlm
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       - OCR_MODE=vlm
     restart: unless-stopped
