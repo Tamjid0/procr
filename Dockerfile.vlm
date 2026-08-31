@@ -1,0 +1,31 @@
+# Procr VLM — Lightweight CPU (no GPU, no MinerU)
+# Keeps adapter.py line projection (PIL) but no torch/vllm/magic-pdf
+# ~200MB vs ~8GB GPU image. For $10k credit burn while preserving line-level citations.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+
+# System deps: libgl1 for Pillow, curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Only lightweight deps — no torch, no vllm, no magic-pdf
+COPY requirements-vlm.txt /workspace/requirements-vlm.txt
+RUN pip install --no-cache-dir -r requirements-vlm.txt
+
+# Copy app (adapter.py line projection stays)
+COPY app/ /workspace/app/
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/diagnostic || exit 1
+
+ENV OCR_MODE=vlm
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
