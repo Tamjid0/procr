@@ -424,6 +424,47 @@ async def batch_stream(job_id: str):
     )
 
 
+@app.post("/api/v1/helper/extract-lines")
+async def helper_extract_lines(
+    files: list[UploadFile] = File(...),
+    metadata: str = Form(...),
+):
+    """Line-helper for Node VLM path: image+blocks -> line-level extracted_regions.
+
+    Node does AI (CF/Gemini) and sends area blocks [0-1000]; procr does
+    PIL _line_bboxes_from_pixels + _wrap_text_to_lines via MinerUAdapter.
+    This keeps citations pixel-level without procr calling AI.
+    """
+    try:
+        meta = json.loads(metadata)
+        pages_meta: list[dict] = meta.get("pages", [])
+        if len(pages_meta) != len(files):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Mismatch: {len(files)} files but {len(pages_meta)} metadata entries",
+            )
+
+        pages = []
+        for f, pm in zip(files, pages_meta):
+            raw = await f.read()
+            image, orig_w, orig_h = _decode_image_bytes(raw)
+            blocks = pm.get("blocks", [])
+            page_index = pm.get("page_index", 0)
+            # Blocks are already MinerU-shaped with [0-1000] bboxes; adapter scales to px
+            result = _format_single_result(blocks, orig_w, orig_h, image)
+            # Override page_index to match caller's index (adapter uses passed page_index)
+            result["page_index"] = page_index
+            pages.append(result)
+
+        return {"pages": pages}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[helper] extract-lines failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
