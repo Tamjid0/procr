@@ -38,6 +38,7 @@ def _line_bboxes_from_pixels(
     bbox: tuple[int, int, int, int],
     page_width: int,
     page_height: int,
+    max_gap: int = MAX_INK_GAP_PIXELS,
 ) -> list[dict[str, int]]:
     """Detect text rows and their horizontal bounds inside a model block."""
     if image is None or page_width <= 0 or page_height <= 0:
@@ -63,7 +64,7 @@ def _line_bboxes_from_pixels(
     dark = [pixel < threshold for pixel in pixels]
     row_counts = [sum(dark[row * width:(row + 1) * width]) for row in range(height)]
     row_threshold = max(2, round(width * MIN_INK_RATIO))
-    row_runs = _runs([count >= row_threshold for count in row_counts], MAX_INK_GAP_PIXELS)
+    row_runs = _runs([count >= row_threshold for count in row_counts], max_gap)
     if not row_runs:
         return []
 

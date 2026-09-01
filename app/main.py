@@ -453,7 +453,7 @@ async def helper_extract_lines(
             blocks = pm.get("blocks", [])
             page_index = pm.get("page_index", 0)
 
-            # Process VLM blocks: each has {type, bbox[x0,y0,x1,y1], content, confidence}
+            # Process VLM blocks: each has {type, bbox, content, confidence, line_count?, line_height_hint?}
             # bbox may be [0-1000] normalized or already pixel-scaled
             extracted_regions = []
             for idx, block in enumerate(blocks):
@@ -461,6 +461,8 @@ async def helper_extract_lines(
                 bbox = block.get("bbox", [0, 0, 0, 0])
                 content = block.get("content", "").strip()
                 confidence = block.get("confidence", 0.95)
+                vlm_line_count = block.get("line_count")
+                vlm_line_height_hint = block.get("line_height_hint")
 
                 if not content:
                     continue
@@ -476,8 +478,26 @@ async def helper_extract_lines(
                 else:
                     x0, y0, x1, y1 = int(bx0), int(by0), int(bx1), int(by1)
 
-                # Run PIL line detection on the block area
-                line_bboxes = _line_bboxes_from_pixels(image, (x0, y0, x1, y1), orig_w, orig_h)
+                # Calculate adaptive gap from VLM hint or block geometry
+                block_height_px = y1 - y0
+                if vlm_line_height_hint and is_normalized:
+                    line_height_px = round((vlm_line_height_hint / 1000) * orig_h)
+                elif vlm_line_count and vlm_line_count > 1:
+                    line_height_px = max(1, round(block_height_px / vlm_line_count))
+                else:
+                    line_height_px = None
+
+                adaptive_gap = max(1, round(line_height_px * 0.4)) if line_height_px else MAX_INK_GAP_PIXELS
+
+                # Run PIL line detection with adaptive gap
+                line_bboxes = _line_bboxes_from_pixels(image, (x0, y0, x1, y1), orig_w, orig_h, max_gap=adaptive_gap)
+
+                # Validate against VLM line_count hint — retry with tighter gap if wrong
+                if vlm_line_count and line_bboxes and len(line_bboxes) != vlm_line_count:
+                    tighter_gap = max(1, adaptive_gap // 2)
+                    retry_bboxes = _line_bboxes_from_pixels(image, (x0, y0, x1, y1), orig_w, orig_h, max_gap=tighter_gap)
+                    if retry_bboxes and abs(len(retry_bboxes) - vlm_line_count) < abs(len(line_bboxes) - vlm_line_count):
+                        line_bboxes = retry_bboxes
 
                 if line_bboxes:
                     lines = _wrap_text_to_lines(content, line_bboxes)
