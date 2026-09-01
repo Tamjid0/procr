@@ -40,12 +40,7 @@ def _line_bboxes_from_pixels(
     page_height: int,
     max_gap: int = MAX_INK_GAP_PIXELS,
 ) -> list[dict[str, int]]:
-    """Detect text rows and their horizontal bounds inside a model block.
-
-    Uses horizontal projection profile: count dark pixels per row, find valleys
-    (rows with zero ink = whitespace between lines), split at valleys.
-    This works for any font size, DPI, or line spacing — no fixed gap threshold.
-    """
+    """Detect text rows and their horizontal bounds inside a model block."""
     if image is None or page_width <= 0 or page_height <= 0:
         return []
 
@@ -66,31 +61,14 @@ def _line_bboxes_from_pixels(
     dark = [pixel < threshold for pixel in pixels]
     row_counts = [sum(dark[row * width:(row + 1) * width]) for row in range(height)]
     row_threshold = max(2, round(width * MIN_INK_RATIO))
-
-    # Projection profile: find valleys (rows with ink below threshold = whitespace)
-    is_ink = [count >= row_threshold for count in row_counts]
-
-    # Find line boundaries by detecting transitions: ink → no-ink (top) and no-ink → ink (bottom)
-    line_runs: list[tuple[int, int]] = []
-    in_line = False
-    line_top = 0
-    for row in range(height):
-        if is_ink[row] and not in_line:
-            line_top = row
-            in_line = True
-        elif not is_ink[row] and in_line:
-            line_runs.append((line_top, row))
-            in_line = False
-    if in_line:
-        line_runs.append((line_top, height))
-
-    if not line_runs:
+    row_runs = _runs([count >= row_threshold for count in row_counts], max_gap)
+    if not row_runs:
         return []
 
     scale_x = page_width / image.width
     scale_y = page_height / image.height
     detected: list[dict[str, int]] = []
-    for run_top, run_bottom in line_runs:
+    for run_top, run_bottom in row_runs:
         run_height = max(1, run_bottom - run_top)
         column_counts = [
             sum(dark[row * width + column] for row in range(run_top, run_bottom))
