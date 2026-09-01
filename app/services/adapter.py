@@ -5,8 +5,8 @@ from PIL import Image
 
 logger = logging.getLogger("procr")
 
-MAX_INK_GAP_PIXELS = 5
-MIN_INK_RATIO = 0.08
+MAX_INK_GAP_PIXELS = 2
+MIN_INK_RATIO = 0.04
 LINE_INK_RATIO = 0.15
 
 
